@@ -7,10 +7,12 @@ on:
         description: HELIX_STEPS value for the baseline run
         required: true
         default: "1980"
+        type: string
       cuda_architectures:
         description: CMake CUDA architecture list
         required: true
         default: "89"
+        type: string
   schedule:
     - cron: "0 3 * * 0"
 

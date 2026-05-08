@@ -9,10 +9,12 @@ on:
       tag:
         description: Existing tag to package and publish
         required: true
+        type: string
       cuda_architectures:
         description: CMake CUDA architecture list
         required: true
         default: "89"
+        type: string
 
 permissions:
   contents: read

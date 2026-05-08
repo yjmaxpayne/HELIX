@@ -10,10 +10,12 @@ on:
         description: HELIX_STEPS value for smoke run
         required: true
         default: "2"
+        type: string
       cuda_architectures:
         description: CMake CUDA architecture list
         required: true
         default: "89"
+        type: string
 
 permissions:
   contents: read
