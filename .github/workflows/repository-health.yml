@@ -1,0 +1,45 @@
+name: Repository Health
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: repository-health-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  metadata:
+    name: Metadata and script checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Check required files
+        run: |
+          test -f README.md
+          test -f CONTRIBUTING.md
+          test -f SECURITY.md
+          test -f CMakeLists.txt
+          test -x scripts/verify_examples.sh
+          test -x scripts/package_release.sh
+
+      - name: Check shell syntax
+        run: bash -n scripts/verify_examples.sh scripts/package_release.sh
+
+      - name: Check generated artifacts are not tracked
+        run: |
+          tracked_generated="$(git ls-files \
+            | grep -E '(^build/|(^|/)(output\.txt|outputEnergy\.txt|output_rho[0-9]+\.txt|snapshot_rho[0-9]+\.dat)$)' \
+            | grep -v '^examples/outputEnergy\.txt$' || true)"
+          if [[ -n "${tracked_generated}" ]]; then
+            echo "${tracked_generated}"
+            echo "Generated HELIX run artifacts must not be tracked." >&2
+            exit 1
+          fi

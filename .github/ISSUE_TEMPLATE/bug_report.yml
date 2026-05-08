@@ -1,0 +1,45 @@
+name: Bug report
+description: Report a build, runtime, or numerical reproduction problem
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What failed, and what did you expect instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      description: Include exact commands and working directory.
+      value: |
+        ```bash
+        cmake -S . -B build/cmake -DCMAKE_BUILD_TYPE=Release
+        cmake --build build/cmake --parallel "$(nproc)"
+        HELIX_STEPS=2 scripts/verify_examples.sh
+        ```
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Include OS, GPU, driver, CUDA toolkit, compiler, and CMake versions.
+      value: |
+        - OS:
+        - GPU:
+        - NVIDIA driver:
+        - CUDA toolkit:
+        - Host compiler:
+        - CMake:
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Relevant output
+      description: Paste compiler/runtime output or the first mismatch from the verification script.
+      render: text

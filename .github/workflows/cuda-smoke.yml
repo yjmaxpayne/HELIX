@@ -1,0 +1,57 @@
+name: CUDA Smoke
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      steps:
+        description: HELIX_STEPS value for smoke run
+        required: true
+        default: "2"
+      cuda_architectures:
+        description: CMake CUDA architecture list
+        required: true
+        default: "89"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cuda-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  cuda-smoke:
+    name: Build and smoke on CUDA runner
+    runs-on: self-hosted
+    timeout-minutes: 20
+    env:
+      HELIX_STEPS: ${{ github.event.inputs.steps || '2' }}
+      HELIX_CUDA_ARCHITECTURES: ${{ github.event.inputs.cuda_architectures || '89' }}
+      HELIX_BUILD_DIR: ${{ runner.temp }}/helix-build
+      HELIX_RUN_DIR: ${{ runner.temp }}/helix-run
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Show GPU and CUDA tools
+        run: |
+          nvidia-smi
+          nvcc --version
+          cmake --version
+
+      - name: Build and verify example prefix
+        run: scripts/verify_examples.sh
+
+      - name: Upload smoke outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cuda-smoke-output
+          path: |
+            ${{ runner.temp }}/helix-run/output*.txt
+            ${{ runner.temp }}/helix-run/snapshot_rho*.dat
+          if-no-files-found: ignore
+          retention-days: 7

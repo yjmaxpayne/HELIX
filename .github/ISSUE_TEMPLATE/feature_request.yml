@@ -1,0 +1,38 @@
+name: Feature request
+description: Propose an improvement to build, verification, documentation, or numerical capability
+title: "[feature] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: What should be possible after this change?
+    validations:
+      required: true
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation
+      description: Why is this useful for HELIX development or reproducibility?
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Build and tooling
+        - CUDA compatibility
+        - Example reproduction
+        - Documentation
+        - Numerical method
+        - Performance
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: risks
+    attributes:
+      label: Risks or compatibility notes
+      description: Note any expected numerical, API, or dependency impact.

@@ -1,0 +1,67 @@
+# Local agent and project-private notes
+AGENTS.md
+CLAUDE.md
+dev/
+
+# CMake and native build outputs
+/build/
+/cmake-build-*/
+/out/
+/dist/
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+compile_commands.json
+CTestTestfile.cmake
+Testing/
+Makefile
+*.ninja
+.ninja_deps
+.ninja_log
+
+# Compiled C/C++/CUDA artifacts
+*.a
+*.dll
+*.dylib
+*.exe
+*.exp
+*.lib
+*.o
+*.obj
+*.pdb
+*.so
+*.so.*
+*.cu.o
+*.cubin
+*.fatbin
+*.ptx
+*.sass
+
+# IDE and editor state
+.cache/
+.clangd/
+.ccls-cache/
+.idea/
+.vscode/
+*.suo
+*.swp
+*.swo
+*.user
+
+# Generated HELIX run outputs
+/output.txt
+/outputEnergy.txt
+/output_rho*.txt
+/snapshot_rho*.dat
+**/output.txt
+**/outputEnergy.txt
+**/output_rho*.txt
+**/snapshot_rho*.dat
+!/examples/outputEnergy.txt
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+*.tar.gz
+*.zip

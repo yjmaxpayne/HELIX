@@ -1,0 +1,112 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to package and publish
+        required: true
+      cuda_architectures:
+        description: CMake CUDA architecture list
+        required: true
+        default: "89"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-package:
+    name: Build, verify, and package CUDA release
+    runs-on: self-hosted
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    env:
+      RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || github.event.inputs.tag }}
+      HELIX_STEPS: "1980"
+      HELIX_CUDA_ARCHITECTURES: ${{ github.event.inputs.cuda_architectures || '89' }}
+      HELIX_BUILD_DIR: ${{ runner.temp }}/helix-release-build
+      HELIX_RUN_DIR: ${{ runner.temp }}/helix-release-run
+      HELIX_DIST_DIR: ${{ runner.temp }}/helix-dist
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_type == 'tag' && github.ref_name || github.event.inputs.tag }}
+
+      - name: Show GPU and CUDA tools
+        run: |
+          nvidia-smi
+          nvcc --version
+          cmake --version
+
+      - name: Build and verify full example baseline
+        run: scripts/verify_examples.sh
+
+      - name: Package release
+        run: scripts/package_release.sh "${RELEASE_TAG}"
+
+      - name: Attest release package
+        if: github.event.repository.visibility == 'public'
+        uses: actions/attest@v4
+        with:
+          subject-path: ${{ runner.temp }}/helix-dist/*.tar.gz
+
+      - name: Upload release package
+        uses: actions/upload-artifact@v4
+        with:
+          name: helix-release-package
+          path: |
+            ${{ runner.temp }}/helix-dist/*.tar.gz
+            ${{ runner.temp }}/helix-dist/*.sha256
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload release verification outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: helix-release-verification-output
+          path: |
+            ${{ runner.temp }}/helix-release-run/output*.txt
+            ${{ runner.temp }}/helix-release-run/snapshot_rho*.dat
+          if-no-files-found: ignore
+          retention-days: 14
+
+  publish:
+    name: Publish GitHub Release
+    needs: build-package
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      actions: read
+    env:
+      RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || github.event.inputs.tag }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Download release package
+        uses: actions/download-artifact@v4
+        with:
+          name: helix-release-package
+          path: dist
+
+      - name: Publish release
+        run: |
+          if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
+            gh release upload "${RELEASE_TAG}" dist/* --clobber
+          else
+            gh release create "${RELEASE_TAG}" dist/* \
+              --title "HELIX ${RELEASE_TAG}" \
+              --notes "Linux x86_64 CUDA release package for HELIX. The CUDA smoke and full numerical baseline passed before publishing."
+          fi

@@ -1,0 +1,56 @@
+name: Numerical Baseline
+
+on:
+  workflow_dispatch:
+    inputs:
+      steps:
+        description: HELIX_STEPS value for the baseline run
+        required: true
+        default: "1980"
+      cuda_architectures:
+        description: CMake CUDA architecture list
+        required: true
+        default: "89"
+  schedule:
+    - cron: "0 3 * * 0"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: numerical-baseline-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  numerical-baseline:
+    name: Full example baseline on CUDA runner
+    runs-on: self-hosted
+    timeout-minutes: 45
+    env:
+      HELIX_STEPS: ${{ github.event.inputs.steps || '1980' }}
+      HELIX_CUDA_ARCHITECTURES: ${{ github.event.inputs.cuda_architectures || '89' }}
+      HELIX_BUILD_DIR: ${{ runner.temp }}/helix-baseline-build
+      HELIX_RUN_DIR: ${{ runner.temp }}/helix-baseline-run
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Show GPU and CUDA tools
+        run: |
+          nvidia-smi
+          nvcc --version
+          cmake --version
+
+      - name: Build and verify full example baseline
+        run: scripts/verify_examples.sh
+
+      - name: Upload baseline outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: numerical-baseline-output
+          path: |
+            ${{ runner.temp }}/helix-baseline-run/output*.txt
+            ${{ runner.temp }}/helix-baseline-run/snapshot_rho*.dat
+          if-no-files-found: ignore
+          retention-days: 14
