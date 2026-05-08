@@ -2,6 +2,7 @@
 AGENTS.md
 CLAUDE.md
 dev/
+plan/
 
 # CMake and native build outputs
 /build/
