@@ -32,6 +32,9 @@ Makefile
 *.so
 *.so.*
 *.cu.o
+*.i
+*.ii
+*.gpu
 *.cubin
 *.fatbin
 *.ptx
