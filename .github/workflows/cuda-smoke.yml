@@ -32,8 +32,6 @@ jobs:
     env:
       HELIX_STEPS: ${{ github.event.inputs.steps || '2' }}
       HELIX_CUDA_ARCHITECTURES: ${{ github.event.inputs.cuda_architectures || '89' }}
-      HELIX_BUILD_DIR: ${{ runner.temp }}/helix-build
-      HELIX_RUN_DIR: ${{ runner.temp }}/helix-run
     steps:
       - name: Check out
         uses: actions/checkout@v6
@@ -46,6 +44,9 @@ jobs:
 
       - name: Build and verify example prefix
         run: scripts/verify_examples.sh
+        env:
+          HELIX_BUILD_DIR: ${{ runner.temp }}/helix-build
+          HELIX_RUN_DIR: ${{ runner.temp }}/helix-run
 
       - name: Upload smoke outputs
         if: always()

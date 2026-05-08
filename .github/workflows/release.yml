@@ -37,9 +37,6 @@ jobs:
       RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || github.event.inputs.tag }}
       HELIX_STEPS: "1980"
       HELIX_CUDA_ARCHITECTURES: ${{ github.event.inputs.cuda_architectures || '89' }}
-      HELIX_BUILD_DIR: ${{ runner.temp }}/helix-release-build
-      HELIX_RUN_DIR: ${{ runner.temp }}/helix-release-run
-      HELIX_DIST_DIR: ${{ runner.temp }}/helix-dist
     steps:
       - name: Check out
         uses: actions/checkout@v6
@@ -54,9 +51,15 @@ jobs:
 
       - name: Build and verify full example baseline
         run: scripts/verify_examples.sh
+        env:
+          HELIX_BUILD_DIR: ${{ runner.temp }}/helix-release-build
+          HELIX_RUN_DIR: ${{ runner.temp }}/helix-release-run
 
       - name: Package release
         run: scripts/package_release.sh "${RELEASE_TAG}"
+        env:
+          HELIX_BUILD_DIR: ${{ runner.temp }}/helix-release-build
+          HELIX_DIST_DIR: ${{ runner.temp }}/helix-dist
 
       - name: Attest release package
         if: github.event.repository.visibility == 'public'
