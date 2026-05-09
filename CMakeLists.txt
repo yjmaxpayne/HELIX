@@ -266,6 +266,72 @@ if(HELIX_BUILD_TESTS)
         TIMEOUT 60
     )
 
+    add_executable(sparse_drho_reference_tests
+        tests/numerical/SparseDrhoReferenceTests.cu
+        src/Initialize.cu
+        src/Liouville.cu
+        src/Matrixes.cu
+        src/MatrixUtil.cu
+    )
+
+    target_link_libraries(sparse_drho_reference_tests PRIVATE
+        helix_host_core
+        helix_test_support
+        CUDA::cublas
+        CUDA::cusparse
+    )
+
+    target_include_directories(sparse_drho_reference_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+
+    set_target_properties(sparse_drho_reference_tests PROPERTIES
+        CUDA_ARCHITECTURES "${HELIX_CUDA_ARCHITECTURES}"
+        CUDA_SEPARABLE_COMPILATION ON
+        CUDA_RESOLVE_DEVICE_SYMBOLS ON
+    )
+
+    helix_add_test(
+        NAME sparse_drho_reference_tests
+        TARGET sparse_drho_reference_tests
+        LABELS numerical
+        GPU
+        TIMEOUT 180
+    )
+
+    add_executable(one_step_evolution_tests
+        tests/numerical/OneStepEvolutionTests.cu
+        src/Initialize.cu
+        src/Liouville.cu
+        src/Matrixes.cu
+        src/MatrixUtil.cu
+    )
+
+    target_link_libraries(one_step_evolution_tests PRIVATE
+        helix_host_core
+        helix_test_support
+        CUDA::cublas
+        CUDA::cusparse
+    )
+
+    target_include_directories(one_step_evolution_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+
+    set_target_properties(one_step_evolution_tests PROPERTIES
+        CUDA_ARCHITECTURES "${HELIX_CUDA_ARCHITECTURES}"
+        CUDA_SEPARABLE_COMPILATION ON
+        CUDA_RESOLVE_DEVICE_SYMBOLS ON
+    )
+
+    helix_add_test(
+        NAME one_step_evolution_tests
+        TARGET one_step_evolution_tests
+        LABELS numerical
+        GPU
+        TIMEOUT 180
+    )
+
     add_executable(energy_trace_compare
         tests/support/EnergyTraceCompareMain.cpp
     )

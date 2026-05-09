@@ -20,6 +20,20 @@ ctest --test-dir build/cmake -L cuda -N
 ctest --test-dir build/cmake -L numerical -N
 ```
 
+## Numerical Reference Tests
+
+T4 numerical tests intentionally use the default compiled configuration as the MVP input profile:
+
+- precision: `SINGLE` (`single`)
+- system size: `Param::N=1024`, `Param::N2=1048576`
+- hierarchy size: `KMax=2`, `JMax=3`, `hierarchySize=10`
+- sparse dRho reference: default `Step=0.1`, default `IntegrationNum=4`
+- one-step evolution reference: default `Step=0.1`, local test override `IntegrationNum=1`
+- tolerance: `1e-5` absolute and relative for single precision
+- toy profile: disabled for now because `Param::N`, `KMax`, and `JMax` are compile-time defaults; a smaller 2x2/4x4 profile should be added through a test profile or facade rather than by changing production defaults.
+
+Each numerical executable prints `reference_input`, `max_abs_diff`, `max_rel_diff`, absolute tolerance, relative tolerance, and reference source. GPU numerical tests must be registered through `helix_add_test(... LABELS numerical GPU TIMEOUT 180)` so they also receive the `cuda` label and `RESOURCE_LOCK gpu`.
+
 ## Host Core Boundary
 
 `helix_host_core` owns host-side helpers that are shared by the executable and unit tests, including PSD pole/residue reference logic and default parameter definitions. Unit tests may compile with the CUDA toolkit because current public headers still expose CUDA types, but the host target must not link `CUDA::cublas` or `CUDA::cusparse`.
