@@ -1,8 +1,8 @@
-#include "cuda_runtime.h"
-#include "device_launch_parameters.h"
 #include "Eigval.h"
-#include "thrust/sort.h"
 #include "Psd.h"
+#include "thrust/sort.h"
+
+#include <cmath>
 
 inline int b(const int m,const bool isFermi)
 {

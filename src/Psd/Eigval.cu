@@ -1,115 +1,128 @@
-
-#include "cuda_runtime.h"
-#include "device_launch_parameters.h"
 #include "Eigval.h"
 
-#include <stdio.h>
-#include <iostream>
-#include <math.h>
+#include <algorithm>
+#include <cmath>
 
-const double alpha=1.0;
-const double beta=0.0;
+namespace {
 
-cublasHandle_t handle;
-thrust::host_vector<double> mul(const thrust::host_vector<double>& A,const thrust::host_vector<double>& B,int n)
+inline double& at(thrust::host_vector<double>& matrix, int row, int column, int size)
 {
-	thrust::host_vector<double> ret(n*n);
-	thrust::device_vector<double> dA=A;
-	thrust::device_vector<double> dB=B;
-	thrust::device_vector<double> dC=ret;
-	cublasDgemm(handle,CUBLAS_OP_N,CUBLAS_OP_N,n,n,n,
-		&alpha,raw_pointer_cast(dA.data()),n,raw_pointer_cast(dB.data()),n,&beta,raw_pointer_cast(dC.data()),n);
-	cudaDeviceSynchronize();
-	ret=dC;
-	dA.clear();
-	dB.clear();
-	dC.clear();
-	return ret;
+	return matrix[row + column * size];
 }
-void separate(int start,int end,thrust::host_vector<double>& matrix,int n)
+
+inline double at(const thrust::host_vector<double>& matrix, int row, int column, int size)
 {
-	if(start>=end)
+	return matrix[row + column * size];
+}
+
+double offDiagonalNorm(const thrust::host_vector<double>& matrix, int size)
+{
+	double norm = 0.0;
+	for(int column = 0; column < size; column++)
+	{
+		for(int row = column + 1; row < size; row++)
+		{
+			norm += std::abs(at(matrix, row, column, size));
+		}
+	}
+	return norm;
+}
+
+void largestOffDiagonal(const thrust::host_vector<double>& matrix, int size, int& row, int& column)
+{
+	row = 1;
+	column = 0;
+	double maxValue = std::abs(at(matrix, row, column, size));
+
+	for(int currentColumn = 0; currentColumn < size; currentColumn++)
+	{
+		for(int currentRow = currentColumn + 1; currentRow < size; currentRow++)
+		{
+			const double value = std::abs(at(matrix, currentRow, currentColumn, size));
+			if(value > maxValue)
+			{
+				maxValue = value;
+				row = currentRow;
+				column = currentColumn;
+			}
+		}
+	}
+}
+
+void rotate(thrust::host_vector<double>& matrix, int size, int p, int q)
+{
+	const double app = at(matrix, p, p, size);
+	const double aqq = at(matrix, q, q, size);
+	const double apq = at(matrix, p, q, size);
+	if(apq == 0.0)
 	{
 		return;
 	}
-	int newN=end-start+1;
-	thrust::host_vector<double> newMat(newN*newN);
-	for(int y=start;y<=end;y++)
+
+	const double angle = 0.5 * std::atan2(2.0 * apq, aqq - app);
+	const double cosine = std::cos(angle);
+	const double sine = std::sin(angle);
+
+	for(int k = 0; k < size; k++)
 	{
-		for(int x=start;x<=end;x++)
+		if(k == p || k == q)
 		{
-			newMat[newN*(x-start)+y-start]=matrix[n*x+y];
+			continue;
 		}
+
+		const double akp = at(matrix, k, p, size);
+		const double akq = at(matrix, k, q, size);
+		const double nextKp = cosine * akp - sine * akq;
+		const double nextKq = sine * akp + cosine * akq;
+
+		at(matrix, k, p, size) = nextKp;
+		at(matrix, p, k, size) = nextKp;
+		at(matrix, k, q, size) = nextKq;
+		at(matrix, q, k, size) = nextKq;
 	}
-	getEigval(newN,newMat);
-	for(int y=start;y<=end;y++)
-	{
-		for(int x=start;x<=end;x++)
-		{
-			matrix[n*x+y]=newMat[newN*(x-start)+y-start];
-		}
-	}
+
+	at(matrix, p, p, size) = cosine * cosine * app - 2.0 * sine * cosine * apq + sine * sine * aqq;
+	at(matrix, q, q, size) = sine * sine * app + 2.0 * sine * cosine * apq + cosine * cosine * aqq;
+	at(matrix, p, q, size) = 0.0;
+	at(matrix, q, p, size) = 0.0;
 }
+
+} // namespace
 
 bool getEigval(int N,thrust::host_vector<double>& matrix)
 {
-	cublasCreate(&handle);
-	double error=1000;
-	if(N==2)
+	if(N <= 0 || matrix.size() < static_cast<size_t>(N * N))
 	{
-		double x00=matrix[0];
-		double x10=matrix[1];
-		double x01=matrix[2];
-		double x11=matrix[3];
-		double d=sqrt((x00-x11)*(x00-x11)+4.0*x10*x01);
-		matrix[0]=0.5*(x00+x11+d);
-		matrix[1]=0.0;
-		matrix[2]=0.0;
-		matrix[3]=0.5*(x00+x11-d);
-		 return true;
+		return false;
 	}
-	do
-	{
-		for(int y=1;y<N;y++)
-		{
-			if(abs(matrix[y+(y-1)*N])<0.0000001){
-				//std::cout<<y<<std::endl;
-				separate(0,y-1,matrix,N);
-				separate(y,N-1,matrix,N);
-				return true;
-			}
-		}
 
-		thrust::host_vector<double> matrixQI(N*N);
-		for(int i=0;i<N;i++)
+	constexpr double tolerance = 1.0e-14;
+	const int maxSweeps = std::max(16, 100 * N * N);
+	double residual = offDiagonalNorm(matrix, N);
+	for(int sweep = 0; sweep < maxSweeps && residual > tolerance; sweep++)
+	{
+		int row = 0;
+		int column = 1;
+		largestOffDiagonal(matrix, N, row, column);
+		rotate(matrix, N, column, row);
+		residual = offDiagonalNorm(matrix, N);
+	}
+
+	if(residual > tolerance)
+	{
+		return false;
+	}
+
+	for(int column = 0; column < N; column++)
+	{
+		for(int row = 0; row < N; row++)
 		{
-			matrixQI[i+i*N]=1.0;
-		}
-		for(int i=N-1;i>0;i--)
-		{
-			thrust::host_vector<double> P(N*N);
-			for(int j=0;j<N;j++)
+			if(row != column)
 			{
-				P[j+j*N]=1.0;
+				at(matrix, row, column, N) = 0.0;
 			}
-			double cos=matrix[i+i*N]/sqrt(matrix[i+i*N]*matrix[i+i*N]+matrix[i-1+i*N]*matrix[i-1+i*N]);
-			double sin=matrix[i-1+i*N]/sqrt(matrix[i+i*N]*matrix[i+i*N]+matrix[i-1+i*N]*matrix[i-1+i*N]);
-			P[i-1+(i-1)*N]=cos;
-			P[i-1+i*N]=-sin;
-			P[i+(i-1)*N]=sin;
-			P[i+i*N]=cos;
-			matrix=mul(P,matrix,N);
-			P[i-1+i*N]=sin;
-			P[i+(i-1)*N]=-sin;
-			matrixQI=mul(matrixQI,P,N);
 		}
-		matrix=mul(matrix,matrixQI,N);
-		error=0.0;
-		for(int y=1;y<N;y++)
-		{
-			error+=abs(matrix[y+(y-1)*N]);
-		}
-		//std::cout<<error<<std::endl;
-	}while(error>0.0000001);
+	}
+
 	return true;
 }
