@@ -36,6 +36,13 @@ jobs:
       - name: Check shell syntax
         run: bash -n scripts/verify_examples.sh scripts/package_release.sh
 
+      - name: Check Release Drafter trigger contract
+        run: |
+          if grep -En '^[[:space:]]*pull_request(_target)?:' .github/workflows/release-drafter.yml; then
+            echo "Release Drafter must not run on pull request events because its config is read from the default branch." >&2
+            exit 1
+          fi
+
       - name: Check generated artifacts are not tracked
         run: |
           tracked_generated="$(git ls-files \
