@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(HELIX LANGUAGES CXX CUDA)
+include(cmake/HelixVersion.cmake)
+
+project(HELIX VERSION ${HELIX_VERSION} LANGUAGES CXX CUDA)
 
 find_package(CUDAToolkit REQUIRED)
 
@@ -8,6 +10,14 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CUDA_STANDARD 17)
 set(CMAKE_CUDA_STANDARD_REQUIRED ON)
+
+set(HELIX_GENERATED_INCLUDE_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
+configure_file(
+    src/HelixVersion.h.in
+    "${HELIX_GENERATED_INCLUDE_DIR}/HelixVersion.h"
+    @ONLY
+)
+message(STATUS "HELIX version: ${HELIX_VERSION_STRING} (${HELIX_VERSION_SOURCE})")
 
 set(HELIX_CUDA_ARCHITECTURES "native" CACHE STRING "CUDA architectures for HELIX")
 if(DEFINED HEOM_CUDA_ARCHITECTURES)
@@ -38,6 +48,7 @@ add_executable(helix
 
 target_include_directories(helix PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${HELIX_GENERATED_INCLUDE_DIR}
 )
 
 target_link_libraries(helix PRIVATE
@@ -62,6 +73,15 @@ if(HELIX_BUILD_TESTS)
     target_include_directories(helix_test_support INTERFACE
         ${CMAKE_CURRENT_SOURCE_DIR}/tests
     )
+
+    find_program(HELIX_COMPUTE_SANITIZER compute-sanitizer
+        HINTS "${CUDAToolkit_BIN_DIR}"
+        DOC "Path to NVIDIA compute-sanitizer"
+    )
+    set(HELIX_COMPUTE_SANITIZER_DEFINITION "")
+    if(HELIX_COMPUTE_SANITIZER)
+        set(HELIX_COMPUTE_SANITIZER_DEFINITION "-DHELIX_COMPUTE_SANITIZER=${HELIX_COMPUTE_SANITIZER}")
+    endif()
 
     # CTest label contract shared by the test-suite refactor tasks.
     set(HELIX_KNOWN_TEST_LABELS
@@ -109,14 +129,17 @@ if(HELIX_BUILD_TESTS)
 
         set(test_labels ${HELIX_TEST_LABELS})
         if(HELIX_TEST_GPU)
+            list(FIND test_labels sanitizer sanitizer_label_index)
             list(FIND test_labels unit unit_label_index)
             if(NOT unit_label_index EQUAL -1)
                 message(FATAL_ERROR "GPU tests must not use the unit label")
             endif()
 
-            list(FIND test_labels cuda cuda_label_index)
-            if(cuda_label_index EQUAL -1)
-                list(APPEND test_labels cuda)
+            if(sanitizer_label_index EQUAL -1)
+                list(FIND test_labels cuda cuda_label_index)
+                if(cuda_label_index EQUAL -1)
+                    list(APPEND test_labels cuda)
+                endif()
             endif()
         endif()
 
@@ -241,6 +264,21 @@ if(HELIX_BUILD_TESTS)
         TIMEOUT 60
     )
 
+    helix_add_test(
+        NAME helix_cuda_memcheck_sanitizer
+        COMMAND
+            ${CMAKE_COMMAND}
+            -DHELIX_SANITIZER_TEST_NAME=helix_cuda_memcheck_sanitizer
+            -DHELIX_SANITIZER_TARGET=$<TARGET_FILE:transpose_cuda_tests>
+            -DHELIX_SANITIZER_REPORT_DIR=${CMAKE_CURRENT_BINARY_DIR}/sanitizer
+            -DHELIX_SANITIZER_TOOL=memcheck
+            ${HELIX_COMPUTE_SANITIZER_DEFINITION}
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/sanitizer/RunCudaSanitizer.cmake
+        LABELS sanitizer
+        GPU
+        TIMEOUT 600
+    )
+
     add_executable(cusparse_wrapper_cuda_tests
         tests/cuda/CusparseWrapperTests.cu
     )
@@ -327,6 +365,39 @@ if(HELIX_BUILD_TESTS)
     helix_add_test(
         NAME one_step_evolution_tests
         TARGET one_step_evolution_tests
+        LABELS numerical
+        GPU
+        TIMEOUT 180
+    )
+
+    add_executable(heom_lifecycle_contract_tests
+        tests/numerical/HeomLifecycleContractTests.cu
+        src/Initialize.cu
+        src/Liouville.cu
+        src/Matrixes.cu
+        src/MatrixUtil.cu
+    )
+
+    target_link_libraries(heom_lifecycle_contract_tests PRIVATE
+        helix_host_core
+        helix_test_support
+        CUDA::cublas
+        CUDA::cusparse
+    )
+
+    target_include_directories(heom_lifecycle_contract_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+
+    set_target_properties(heom_lifecycle_contract_tests PROPERTIES
+        CUDA_ARCHITECTURES "${HELIX_CUDA_ARCHITECTURES}"
+        CUDA_SEPARABLE_COMPILATION ON
+        CUDA_RESOLVE_DEVICE_SYMBOLS ON
+    )
+
+    helix_add_test(
+        NAME heom_lifecycle_contract_tests
+        TARGET heom_lifecycle_contract_tests
         LABELS numerical
         GPU
         TIMEOUT 180

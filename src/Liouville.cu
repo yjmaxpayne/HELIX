@@ -432,15 +432,11 @@ void getdRhowithBLAS(const device_vector<Complex>& rhoVec,device_vector<Complex>
 
 bool initSparse(host_vector<cudaStream_t>& streams,host_vector<cublasHandle_t>& blasHandles,host_vector<cusparseHandle_t>& sparseHandles,device_vector<Complex>& coefficients,cusparseMatDescr_t& matDescr)
 {
-	static const Complex* h=raw_pointer_cast(dH.data());
-	static const Complex* v=raw_pointer_cast(dV.data());
-	static Complex* buffer=raw_pointer_cast(dBuffer.data());
-	static host_vector<int> edges=dHierarchyEdge;
-	static host_vector<int> numbers=dHierarchies;
-	static int kMax=Param::KMax;
-	static host_vector<Complex> nu=dNu;
+	host_vector<int> numbers=dHierarchies;
+	int kMax=Param::KMax;
+	host_vector<Complex> nu=dNu;
 	
-	static host_vector<Complex> consts(5);
+	host_vector<Complex> consts(5);
 	consts[0]=make_Complex(0.0,0.0);
 	consts[1]=make_Complex(1.0,0.0);
 	consts[2]=make_Complex(-1.0,0.0);
@@ -512,17 +508,13 @@ void getdRhoSparse(const device_vector<Complex>& rhoVec,device_vector<Complex>& 
 		sparseInitialized()=initSparse(streams,blasHandles,sparseHandles,coefficients,MatDescr);
 	}
 	Complex* pCoefficients=raw_pointer_cast(coefficients.data());
-	static const Complex* pRho=raw_pointer_cast(rhoVec.data());
-	static Complex* pdRho=raw_pointer_cast(drhoVec.data());
-	static int n =Param::N;
-	static const Complex* h=raw_pointer_cast(dH.data());
-	static const Complex* v=raw_pointer_cast(dV.data());
-	static Complex* buffer=raw_pointer_cast(dBuffer.data());
-	static host_vector<int> edges=dHierarchyEdge;
-	static host_vector<int> numbers=dHierarchies;
-	static int kMax=Param::KMax;
-	static host_vector<Complex> nu=dNu;
-	static int vSize=dVElements.size();
+	const Complex* pRho=raw_pointer_cast(rhoVec.data());
+	Complex* pdRho=raw_pointer_cast(drhoVec.data());
+	int n =Param::N;
+	Complex* buffer=raw_pointer_cast(dBuffer.data());
+	host_vector<int> edges=dHierarchyEdge;
+	int kMax=Param::KMax;
+	int vSize=dVElements.size();
 	for(int i=0;i<hierarchySize;i++)
 	{
 		int index=i;

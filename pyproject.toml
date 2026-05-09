@@ -1,0 +1,54 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "helix-docs"
+version = "0.0.1"
+description = "Documentation environment for HELIX."
+requires-python = ">=3.11"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+  {name = "Ye Jun", email = "yjmaxpayne@hotmail.com"},
+]
+dependencies = []
+
+[project.optional-dependencies]
+docs = [
+  "sphinx>=8.2",
+  "furo>=2025.7.19",
+  "breathe>=4.35",
+  "sphinx-copybutton>=0.5",
+  "myst-parser[linkify]>=4.0",
+  "sphinxcontrib-mermaid>=1.0",
+  "dunamai>=1.19",
+]
+release = [
+  "commitizen>=4.10",
+  "dunamai>=1.19",
+]
+
+[tool.setuptools]
+packages = []
+py-modules = []
+
+[tool.helix.docs]
+system-dependencies = ["doxygen"]
+build-command = 'make -C doc html SPHINXOPTS="-W --keep-going"'
+python-install-command = 'python -m pip install -e ".[docs]"'
+
+[tool.helix.version]
+authority = "git tag"
+tag-format = "vMAJOR.MINOR.PATCH"
+cmake-override = "HELIX_RELEASE_VERSION"
+runtime-command = "helix --version"
+
+[tool.commitizen]
+name = "cz_conventional_commits"
+version_provider = "scm"
+tag_format = "v$version"
+version_scheme = "semver"
+changelog_file = "CHANGELOG.md"
+update_changelog_on_bump = false
+changelog_incremental = true

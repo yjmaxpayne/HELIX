@@ -26,7 +26,10 @@ jobs:
           test -f README.md
           test -f CONTRIBUTING.md
           test -f SECURITY.md
+          test -f CHANGELOG.md
           test -f CMakeLists.txt
+          test -f cmake/HelixVersion.cmake
+          test -f .github/release-drafter.yml
           test -x scripts/verify_examples.sh
           test -x scripts/package_release.sh
 
@@ -36,7 +39,7 @@ jobs:
       - name: Check generated artifacts are not tracked
         run: |
           tracked_generated="$(git ls-files \
-            | grep -E '(^build/|(^|/)(output\.txt|outputEnergy\.txt|output_rho[0-9]+\.txt|snapshot_rho[0-9]+\.dat)$)' \
+            | grep -E '(^build/|^doc/build/|^doc/_doxygen/|(^|/)(output\.txt|outputEnergy\.txt|output_rho[0-9]+\.txt|snapshot_rho[0-9]+\.dat)$)' \
             | grep -v '^examples/outputEnergy\.txt$' || true)"
           if [[ -n "${tracked_generated}" ]]; then
             echo "${tracked_generated}"

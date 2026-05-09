@@ -20,3 +20,8 @@ Notes:
 
 - [ ] No new dependency
 - [ ] No generated run outputs committed
+
+## Release Notes
+
+- [ ] Conventional Commit subject used, or release note impact is documented here
+- [ ] No release note needed

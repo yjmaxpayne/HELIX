@@ -55,5 +55,6 @@ jobs:
           path: |
             ${{ runner.temp }}/helix-baseline-run/output*.txt
             ${{ runner.temp }}/helix-baseline-run/snapshot_rho*.dat
+            ${{ runner.temp }}/helix-baseline-run/energy_compare_summary.txt
           if-no-files-found: ignore
           retention-days: 14

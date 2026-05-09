@@ -24,6 +24,9 @@ cmake "${cmake_args[@]}"
 cmake --build "${BUILD_DIR}" --parallel "${BUILD_JOBS}"
 
 mkdir -p "${RUN_DIR}"
+SUMMARY_FILE="${HELIX_COMPARE_SUMMARY:-${RUN_DIR}/energy_compare_summary.txt}"
+mkdir -p "$(dirname "${SUMMARY_FILE}")"
+: > "${SUMMARY_FILE}"
 
 echo "Running helix with HELIX_STEPS=${STEPS}"
 (
@@ -31,7 +34,20 @@ echo "Running helix with HELIX_STEPS=${STEPS}"
     /usr/bin/time -p env HELIX_STEPS="${STEPS}" "${BUILD_DIR}/helix"
 )
 
-awk -v tol="${ENERGY_TOL}" '
+awk -v tol="${ENERGY_TOL}" -v summary="${SUMMARY_FILE}" '
+function emit_stdout(message) {
+    print message
+    print message >> summary
+}
+function emit_stderr(message) {
+    print message > "/dev/stderr"
+    print message >> summary
+}
+function fail(message) {
+    emit_stderr(message)
+    failed = 1
+    exit 1
+}
 NR == FNR {
     ref_time[NR] = $1
     ref_energy[NR] = $2
@@ -41,8 +57,7 @@ NR == FNR {
 {
     run_count = FNR
     if (FNR > ref_count) {
-        printf("run has more lines than reference at line %d\n", FNR) > "/dev/stderr"
-        exit 1
+        fail(sprintf("run has more lines than reference at line %d", FNR))
     }
     dt = $1 - ref_time[FNR]
     if (dt < 0) dt = -dt
@@ -51,19 +66,21 @@ NR == FNR {
     if (dt > max_dt) max_dt = dt
     if (de > max_de) max_de = de
     if (dt != 0 || de > tol) {
-        printf("mismatch line %d: ref=(%s,%s) run=(%s,%s) |dt|=%g |de|=%g tol=%g\n",
-               FNR, ref_time[FNR], ref_energy[FNR], $1, $2, dt, de, tol) > "/dev/stderr"
-        exit 1
+        fail(sprintf("mismatch line %d: ref=(%s,%s) run=(%s,%s) |dt|=%g |de|=%g tol=%g",
+                     FNR, ref_time[FNR], ref_energy[FNR], $1, $2, dt, de, tol))
     }
 }
 END {
-    if (run_count == 0) {
-        print "run produced no outputEnergy rows" > "/dev/stderr"
+    if (failed) {
         exit 1
     }
-    printf("outputEnergy prefix matched: lines=%d max_time_diff=%g max_energy_diff=%g tol=%g\n",
-           run_count, max_dt + 0, max_de + 0, tol)
+    if (run_count == 0) {
+        fail("run produced no outputEnergy rows")
+    }
+    emit_stdout(sprintf("outputEnergy prefix matched: lines=%d max_time_diff=%g max_energy_diff=%g tol=%g",
+                        run_count, max_dt + 0, max_de + 0, tol))
 }
 ' "${ROOT_DIR}/examples/outputEnergy.txt" "${RUN_DIR}/outputEnergy.txt"
 
 echo "Outputs written to ${RUN_DIR}"
+echo "Comparison summary written to ${SUMMARY_FILE}"

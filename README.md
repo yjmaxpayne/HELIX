@@ -1,6 +1,10 @@
 # HELIX
 
 <p align="center">
+  <img src="doc/source/_static/logo.png" alt="HELIX logo" width="180">
+</p>
+
+<p align="center">
   <img src="https://img.shields.io/badge/C%2B%2B-17-00599C.svg?logo=cplusplus&logoColor=white" alt="C++17">
   <img src="https://img.shields.io/badge/CUDA-13.0%2B-76B900.svg?logo=nvidia&logoColor=white" alt="CUDA 13.0+">
   <img src="https://img.shields.io/badge/CMake-3.24%2B-064F8C.svg?logo=cmake&logoColor=white" alt="CMake 3.24+">
@@ -68,18 +72,78 @@ For a quick smoke test:
 HELIX_STEPS=2 scripts/verify_examples.sh
 ```
 
-Current full verification on the environment above:
+CTest labels split fast correctness gates from longer or specialized checks:
 
-- Command: `HELIX_STEPS=1980 build/cmake/helix` from `build/run-example-1980`
-- Runtime: `real 119.08s`
+```bash
+ctest --test-dir build/cmake -L unit --output-on-failure
+ctest --test-dir build/cmake -L cuda --output-on-failure
+ctest --test-dir build/cmake -L numerical --output-on-failure
+ctest --test-dir build/cmake -L integration --output-on-failure
+ctest --test-dir build/cmake -L baseline --output-on-failure
+ctest --test-dir build/cmake -L sanitizer --output-on-failure
+```
+
+The `sanitizer` label runs `compute-sanitizer --tool memcheck` and writes reports under `build/cmake/sanitizer/` unless `HELIX_SANITIZER_REPORT_DIR` is set.
+
+Gate ownership is split by cost: `unit`, `cuda`, and `integration` run in the CUDA smoke pull-request workflow; `sanitizer` is a manual pre-merge workflow dispatch option; the full 1980-step baseline runs in the scheduled/manual numerical baseline workflow and in release packaging.
+
+Current full verification on the environment above, from the 2026-05-09 final baseline:
+
+- Command: `HELIX_STEPS=1980 scripts/verify_examples.sh`, running `build/cmake/helix` from `build/cmake/example-run`
+- Runtime: `real 113.14s`
 - Output rows: `1981`
-- `outputEnergy.txt` maximum absolute energy difference versus `examples/outputEnergy.txt`: `8e-7`
+- `outputEnergy.txt` maximum absolute time difference versus `examples/outputEnergy.txt`: `0`
+- `outputEnergy.txt` maximum absolute energy difference versus `examples/outputEnergy.txt`: `5e-7`
 - `output.txt` differs from the historical file because it records performance timing, not a physics baseline
 
 ## Notes
 
 - The default numerical path is the sparse host cuBLAS/cuSPARSE path. The old `DYNAMIC_DENSE` path depends on device-side cuBLAS patterns from older CUDA releases and is not enabled.
 - CUDA 13 removed legacy `cusparseCcsrmm/csrmm2`; this tree uses a compatibility wrapper around `cusparseSpMM`.
+
+## Documentation
+
+Sphinx documentation lives in `doc/source`. API pages are generated from `src/`
+with Doxygen and Breathe. Python autodoc support is already enabled for future
+bindings:
+
+```bash
+python3 -m venv build/docs-venv
+build/docs-venv/bin/python -m pip install -e ".[docs]"
+SPHINXBUILD="$PWD/build/docs-venv/bin/sphinx-build" \
+  make -C doc html SPHINXOPTS="-W --keep-going"
+```
+
+The HTML output is written to `doc/build/html`. Doxygen is required for local
+C++/CUDA API builds and in the documentation CI workflow. The tracked
+`doc/Doxyfile.in` template is materialized under `doc/_doxygen/` during builds.
+
+The `Documentation` GitHub Actions workflow builds docs for pull requests and
+publishes `doc/build/html` to GitHub Pages on pushes to `main`. The HELIX
+repository is configured to use **GitHub Actions** as the Pages publishing
+source; forks need the same Pages setting if they want automatic publication.
+After the first successful `main` deployment, the site is available at
+<https://yjmaxpayne.github.io/HELIX/>.
+
+## Release Management
+
+The first HELIX product version is `v0.0.1`. Product versions come from SemVer
+Git tags; CMake embeds the resolved version in the executable:
+
+```bash
+build/cmake/helix --version
+```
+
+For the initial release candidate, pass the tag explicitly so the binary,
+package manifest, and GitHub Release stay synchronized:
+
+```bash
+HELIX_RELEASE_VERSION=v0.0.1 HELIX_STEPS=1980 scripts/verify_examples.sh
+scripts/package_release.sh v0.0.1
+```
+
+Use Conventional Commit subjects and generate formal changelog entries with
+`cz changelog --incremental` from the optional `.[release]` tooling.
 
 ## Credit
 

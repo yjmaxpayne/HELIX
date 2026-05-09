@@ -1,0 +1,67 @@
+name-template: "v$RESOLVED_VERSION"
+tag-template: "v$RESOLVED_VERSION"
+change-template: "- $TITLE @$AUTHOR (#$NUMBER)"
+change-title-escapes: "\\<*_&"
+
+categories:
+  - title: "C++/CUDA Core"
+    labels:
+      - "core"
+      - "cuda"
+      - "enhancement"
+      - "feature"
+  - title: "Numerical Correctness"
+    labels:
+      - "numerical"
+      - "baseline"
+      - "bug"
+      - "fix"
+  - title: "Tests and Validation"
+    labels:
+      - "test"
+      - "tests"
+      - "sanitizer"
+      - "benchmark"
+  - title: "Documentation"
+    labels:
+      - "documentation"
+      - "docs"
+  - title: "Build, CI, and Release"
+    labels:
+      - "build"
+      - "ci"
+      - "release"
+      - "maintenance"
+      - "chore"
+  - title: "Security"
+    labels:
+      - "security"
+
+version-resolver:
+  major:
+    labels:
+      - "major"
+  minor:
+    labels:
+      - "minor"
+  patch:
+    labels:
+      - "patch"
+  default: patch
+
+template: |
+  ## Highlights
+
+  $CHANGES
+
+  ## Release Gate
+
+  - CUDA release build passed.
+  - Full numerical baseline passed with `HELIX_STEPS=1980`.
+  - Release package includes SHA-256 checksum and provenance manifest.
+
+  **Full Changelog**: https://github.com/$OWNER/$REPOSITORY/compare/$PREVIOUS_TAG...v$RESOLVED_VERSION
+
+  ## Contributors
+
+  $CONTRIBUTORS

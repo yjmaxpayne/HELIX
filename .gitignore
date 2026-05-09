@@ -18,6 +18,7 @@ compile_commands.json
 CTestTestfile.cmake
 Testing/
 Makefile
+!/doc/Makefile
 *.ninja
 .ninja_deps
 .ninja_log
@@ -42,6 +43,10 @@ Makefile
 *.fatbin
 *.ptx
 *.sass
+
+# Documentation build outputs
+/doc/build/
+/doc/_doxygen/
 
 # IDE and editor state
 .cache/
@@ -71,3 +76,4 @@ Makefile
 *.temp
 *.tar.gz
 *.zip
+*.egg-info/
