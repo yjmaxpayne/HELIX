@@ -21,7 +21,6 @@ WARN_AS_ERROR          = NO
 INPUT                  = "@PROJECT_ROOT@/src"
 RECURSIVE              = YES
 FILE_PATTERNS          = *.h *.cu
-EXCLUDE_PATTERNS       = */hEquationNew.vcxproj
 STRIP_FROM_PATH        = "@PROJECT_ROOT@"
 
 EXTRACT_ALL            = YES

@@ -15,7 +15,7 @@
   <img src="https://img.shields.io/badge/cuBLAS%20%2F%20cuSPARSE-Required-76B900.svg?logo=nvidia&logoColor=white" alt="cuBLAS/cuSPARSE required">
 </p>
 
-HELIX (HEOM Library for Integrated eXecution) is a modernization of a legacy CUDA codebase for GPU-accelerated HEOM. The historical Visual Studio 2012 / CUDA 6.5 project file is still under `src/hEquationNew.vcxproj`; for current Linux development, use the CMake build in this tree.
+HELIX (HEOM Library for Integrated eXecution) is a modernization of a legacy CUDA codebase for GPU-accelerated HEOM. The maintained build system is the CMake configuration in this tree.
 
 ## Requirements
 
