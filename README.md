@@ -13,24 +13,6 @@
 
 HELIX (HEOM Library for Integrated eXecution) is a modernization of a legacy CUDA codebase for GPU-accelerated HEOM. The historical Visual Studio 2012 / CUDA 6.5 project file is still under `src/hEquationNew.vcxproj`; for current Linux development, use the CMake build in this tree.
 
-## Credit and Citation
-
-This repository keeps the original CUDA implementation usable while moving it toward a maintainable HEOM library.
-
-The HEOM method comes from work by Yoshitaka Tanimura and collaborators. Useful starting references are:
-
-- Y. Tanimura and R. Kubo, "Time evolution of a quantum system in contact with a nearly Gaussian-Markoffian noise bath," J. Phys. Soc. Jpn. 58, 101-114 (1989).
-- Y. Tanimura and P. G. Wolynes, "Quantum and classical Fokker-Planck equations for a Gaussian-Markovian noise bath," Phys. Rev. A 43, 4131-4142 (1991).
-- Y. Tanimura, "Perspective: Numerically 'Exact' Approach to Open Quantum Dynamics: The Hierarchical Equations of Motion (HEOM)," J. Chem. Phys. 153, 020901 (2020).
-
-The original GPU-HEOM CUDA code is by Masashi Tsuchimoto and Yoshitaka Tanimura. The Kyoto University Theoretical Chemistry Group research activity page lists "GPU-HEOM (HEOM code for CUDA)" as work by M. Tsuchimoto and Y. Tanimura:
-
-- http://theochem.kuchem.kyoto-u.ac.jp/resarch/resarch_activity.htm
-
-If you use this code, cite the original GPU-HEOM paper:
-
-> Masashi Tsuchimoto and Yoshitaka Tanimura, "Spins Dynamics in a Dissipative Environment: Hierarchal Equations of Motion Approach Using a Graphics Processing Unit (GPU)," Journal of Chemical Theory and Computation 11, 3859-3865 (2015). https://doi.org/10.1021/acs.jctc.5b00488
-
 ## Requirements
 
 Verified environment:
@@ -99,6 +81,45 @@ Current full verification on the environment above:
 - The default numerical path is the sparse host cuBLAS/cuSPARSE path. The old `DYNAMIC_DENSE` path depends on device-side cuBLAS patterns from older CUDA releases and is not enabled.
 - CUDA 13 removed legacy `cusparseCcsrmm/csrmm2`; this tree uses a compatibility wrapper around `cusparseSpMM`.
 
+## Credit
+
+This repository keeps the original CUDA implementation usable while moving it toward a maintainable HEOM library.
+
+The original GPU-HEOM CUDA code is by Masashi Tsuchimoto and Yoshitaka Tanimura. The Kyoto University Theoretical Chemistry Group research activity page lists "GPU-HEOM (HEOM code for CUDA)" as work by M. Tsuchimoto and Y. Tanimura:
+
+- http://theochem.kuchem.kyoto-u.ac.jp/resarch/resarch_activity.htm
+
+HELIX modernization, Linux/CMake/CUDA 13 migration, verification workflow, documentation, ongoing library maintenance and further developments are by Ye Jun <yjmaxpayne@hotmail.com>.
+
+## Citation
+
+If you use HELIX in your research, please cite the following:
+
+```bibtex
+@article{doi:10.1021/acs.jctc.5b00488,
+author = {Tsuchimoto, Masashi and Tanimura, Yoshitaka},
+title = {Spins Dynamics in a Dissipative Environment: Hierarchal Equations of Motion Approach Using a Graphics Processing Unit (GPU)},
+journal = {Journal of Chemical Theory and Computation},
+volume = {11},
+number = {8},
+pages = {3859-3865},
+year = {2015},
+doi = {10.1021/acs.jctc.5b00488}
+}
+
+@software{helix,
+  title = {HELIX: HEOM Library for Integrated eXecution},
+  author = {Ye, Jun},
+  year = {2026},
+  url = {https://github.com/yjmaxpayne/HELIX},
+  note = {Contact: yjmaxpayne@hotmail.com}
+}
+```
+
 ## License
 
 This repository is released under the MIT License. See `LICENSE`.
+
+## Supports
+
+For questions, issues, or collaboration requests, please use GitHub Issues or contact Ye Jun at yjmaxpayne@hotmail.com.
