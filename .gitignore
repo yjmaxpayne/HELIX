@@ -4,6 +4,7 @@ CLAUDE.md
 dev/
 plan/
 .plan/
+.claude/
 
 # CMake and native build outputs
 /build/
