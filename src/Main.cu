@@ -129,18 +129,18 @@ int main(int argc, char** argv)
 	}
 
 	initialize();
-	
+
 	float cuTime=0.0f;
 	cudaEvent_t start,stop;
 	cudaEventCreate(&start);
 	cudaEventCreate(&stop);
-	
+
 	clock_t startTime, endTime;
 	int stepnum=readStepCount();
 	ofstream output;
 	energyStream=ofstream("outputEnergy.txt");
 	int logCutNum=Param::OutputNum*1000;
-	
+
 	host_vector<Complex> rhoTmp=dRho;
 	cudaEventRecord(start,0);
 	startTime = clock();
@@ -160,7 +160,7 @@ int main(int argc, char** argv)
 				sss<<"output_rho";
 				sss<<outnum;
 				sss<<".txt";
-				
+
 				output.open(sss.str(),ios::out);
 
 				std::stringstream ssss;
@@ -196,8 +196,8 @@ int main(int argc, char** argv)
 		}
 		time+=Param::Step;
 		develop();
-		
-		
+
+
 	}
     cudaEventRecord(stop,0);
     cudaEventSynchronize(stop);

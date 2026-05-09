@@ -48,6 +48,9 @@ Makefile
 /doc/build/
 /doc/_doxygen/
 
+# Python local environments
+.venv/
+
 # IDE and editor state
 .cache/
 .clangd/

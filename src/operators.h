@@ -7,27 +7,27 @@
 #include "TypeDef.h"
 
 
-__host__ __device__ static __inline__ Complex 
+__host__ __device__ static __inline__ Complex
 operator-(const Complex &a) {
 	return make_Complex(-a.x,-a.y);
 }
 
-__host__ __device__ static __inline__ Complex 
+__host__ __device__ static __inline__ Complex
 operator-(const Complex &a,const Complex &b) {
 	return a+(-b);
 }
 
-__host__ __device__ static __inline__ Complex 
+__host__ __device__ static __inline__ Complex
 operator*(const Complex &a,const double &b) {
 	return make_Complex(a.x*b,a.y*b);
 }
 
-__host__ __device__ static __inline__ Complex 
+__host__ __device__ static __inline__ Complex
 operator*(const double &a,const Complex &b) {
 	return b*a;
 }
 
-__host__ __device__ static __inline__ bool 
+__host__ __device__ static __inline__ bool
 operator==(const Complex &a,const Complex &b) {
 	return a.x==b.x&&a.y==b.y;
 }

@@ -8,7 +8,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 PROJECT_ROOT = ROOT.parent
 DOXYGEN_XML = PROJECT_ROOT / "doc" / "_doxygen" / "xml"

@@ -172,11 +172,11 @@ __host__ __inline__ void CommutateSparse(const cusparseHandle_t &handle,const cu
 		elements,offsets,columns,
 		matrixDence,n,pZero,result,n));
 	transpose(result,n,stream);
-		
+
 	cusparseError(cusparseCsrmm2(handle,CUSPARSE_OPERATION_NON_TRANSPOSE,CUSPARSE_OPERATION_TRANSPOSE,n,n,n,nnz,k,MatDescr,
 		elements,offsets,columns,
 		matrixDence,n,pMinusOne,result,n));
-		
+
 	transpose(result,n,stream);
 }
 __host__ __inline__ void addCommutateSparse(const cusparseHandle_t &handle,const cudaStream_t & stream,const cusparseMatDescr_t MatDescr, const Complex* elements,const int* columns,const int* offsets,const int nnz,const Complex* matrixDence,const Complex* k,const Complex* minusK,const int n,Complex* result)
@@ -184,13 +184,13 @@ __host__ __inline__ void addCommutateSparse(const cusparseHandle_t &handle,const
 	cusparseError(cusparseCsrmm(handle,CUSPARSE_OPERATION_NON_TRANSPOSE,n,n,n,nnz,minusK,MatDescr,
 		elements,offsets,columns,
 		matrixDence,n,pOne,result,n));
-		
+
 	transpose(result,n,stream);
-		
+
 	cusparseError(cusparseCsrmm2(handle,CUSPARSE_OPERATION_NON_TRANSPOSE,CUSPARSE_OPERATION_TRANSPOSE,n,n,n,nnz,k,MatDescr,
 		elements,offsets,columns,
 		matrixDence,n,pOne,result,n));
-		
+
 	transpose(result,n,stream);
 }
 __host__ __inline__ void addAntiCommutateSparse(const cusparseHandle_t &handle,const cudaStream_t & stream,const cusparseMatDescr_t MatDescr, const Complex* elements,const int* columns,const int* offsets,const int nnz,const Complex* matrixDence,const Complex* k,const int n,Complex* result)
@@ -198,13 +198,13 @@ __host__ __inline__ void addAntiCommutateSparse(const cusparseHandle_t &handle,c
 	cusparseError(cusparseCsrmm(handle,CUSPARSE_OPERATION_NON_TRANSPOSE,n,n,n,nnz,k,MatDescr,
 		elements,offsets,columns,
 		matrixDence,n,pOne,result,n));
-		
+
 	transpose(result,n,stream);
-		
+
 	cusparseError(cusparseCsrmm2(handle,CUSPARSE_OPERATION_NON_TRANSPOSE,CUSPARSE_OPERATION_TRANSPOSE,n,n,n,nnz,k,MatDescr,
 		elements,offsets,columns,
 		matrixDence,n,pOne,result,n));
-		
+
 	transpose(result,n,stream);
 }
 
@@ -220,7 +220,7 @@ __global__ void getdRhoKernelPrepare(
 	cublasHandle_t handle;
 	cublasError(cublasCreate(&handle));
 	int index=blockIdx.x;
-	
+
 	//L
 #ifdef H_DIAGONAL //if H is diagonal
 	cublasDgmm(handle,CUBLAS_SIDE_LEFT,n,n,Rho+index*n*n,n,h,n+1,dRho+index*n*n,n);
@@ -228,7 +228,7 @@ __global__ void getdRhoKernelPrepare(
 #else
 	Commutate(handle,h,Rho+index*n*n,&minusiCnt,n,dRho+index*n*n);
 #endif
-	
+
 	//Calculate commutator of V and finish kernel to synchronize
 	Commutate(handle,v,Rho+index*n*n,&one,n,buffer+index*n*n);
 	cublasDestroy(handle);
@@ -257,13 +257,13 @@ __global__ void getdRhoKernel(
 	cublasError(cublasCreate(&handle));
 	int index=blockIdx.x;
 	int indexmMinus1=edges[index*(kMax*2+2)+kMax+1];
-	//phi          
+	//phi
 	for(int i=0;i<kMax+1;i++)
 	{
 		int indexkPlus1=edges[index*(kMax*2+2)+i];
 		addMatrix(handle,n,&minusiCnt,dRho+index*n*n,buffer+indexkPlus1*n*n);
 	}
-	
+
 	//psi
 	for(int i=1;i<kMax+1;i++)
 	{
@@ -277,7 +277,7 @@ __global__ void getdRhoKernel(
 	double ngamma=-nu[0].x*numbers[index*(kMax+1)];
 	tmp[index]=make_Complex(ngamma*kThetaCommutate.x,ngamma*kThetaCommutate.y);
 	addMatrix(handle,n,&tmp[index],dRho+index*n*n,buffer+indexmMinus1*n*n);
-	
+
 	//theta2
 	tmp[index]=make_Complex(ngamma*kThetaAntiCommutate.x,ngamma*kThetaAntiCommutate.y);
 	addAntiCommutate(handle,dRho+index*n*n,v,Rho+indexmMinus1*n*n,&tmp[index],n);
@@ -295,12 +295,12 @@ __global__ void getdRhoKernel(
 	tmp[index]=make_Complex(-kXi.x,-kXi.y);
 	tmp[index+size]=make_Complex(kXi.x,kXi.y);
 	addCommutate(handle,dRho+index*n*n,v,buffer+index*n*n,&tmp[index],&tmp[index+size],n);
-	
+
 #ifdef USE_COUNTER
 	tmp[index]=make_Complex(-kXiCounter.x,-kXiCounter.y);
 	addAntiCommutate(handle,dRho+index*n*n,v,buffer+index*n*n,&tmp[index],n);
 #endif
-	
+
 	cublasDestroy(handle);
 }
 #endif
@@ -309,7 +309,7 @@ void develop()
 {
 	int rhoSize=hierarchySize*Param::N2;
 
-	
+
 	double t=Param::Step;
 	int m=Param::IntegrationNum;
 	device_vector<Complex>& F=developFStorage();
@@ -319,7 +319,7 @@ void develop()
 	F=dRho;
 	static Complex one=make_Complex(1.0,0.0);
 	static Complex minusOne=make_Complex(-1.0,0.0);
-	static Complex zero=make_Complex(0.0,0.0);		
+	static Complex zero=make_Complex(0.0,0.0);
 	for(int j=1;j<=m;j++)
 	{
 		Complex tj=make_Complex(t/j,0.0);
@@ -329,14 +329,14 @@ void develop()
 		getdRhoSparse(dRho,B);
 #endif
 		cublasError(cublasScal(cublasHandle,rhoSize,&tj,raw_pointer_cast(B.data()),1));
-		
+
 		cublasError(cublasAxpy(cublasHandle,rhoSize,&one,raw_pointer_cast(B.data()),1,raw_pointer_cast(F.data()),1));
-		
+
 		cudaDeviceSynchronize();
 		copy(B.begin(),B.end(),dRho.begin());
 	}
 	copy(F.begin(),F.end(),dRho.begin());
-	
+
 	//RK4
 	/*Complex* rho=raw_pointer_cast(dRho.data());
 	static device_vector<Complex> dRhoTmp=device_vector<Complex>(rhoSize);
@@ -344,7 +344,7 @@ void develop()
 	static host_vector<Complex> Rho1=host_vector<Complex>(rhoSize);
 	static host_vector<Complex> Rho2=host_vector<Complex>(rhoSize);
 	static host_vector<Complex> Rho3=host_vector<Complex>(rhoSize);
-	
+
 	static Complex* pdRhoTmp=raw_pointer_cast(dRhoTmp.data());
 	static Complex* pRhoN=raw_pointer_cast(RhoN.data());
 	const Complex h2Complex=make_Complex(0.5*Param::Step,0.0);
@@ -355,10 +355,10 @@ void develop()
 	copy(dRho.begin(),dRho.end(),RhoN.begin());
 	cudaDeviceSynchronize();
 	cublasError(cublasZaxpy(cublasHandle,rhoSize,&h2Complex,pdRhoTmp,1,pRhoN,1));
-	
+
 	cudaDeviceSynchronize();
 	Rho1=dRhoTmp;
-	
+
 	getdRho(RhoN,dRhoTmp);
 	copy(dRho.begin(),dRho.end(),RhoN.begin());
 	cudaDeviceSynchronize();
@@ -375,7 +375,7 @@ void develop()
 
 	getdRho(RhoN,dRhoTmp);
 	cublasError(cublasZaxpy(cublasHandle,rhoSize,&h6Complex,pdRhoTmp,1,rho,1));
-	
+
 	dRhoTmp=Rho1;
 	cublasError(cublasZaxpy(cublasHandle,rhoSize,&h6Complex,pdRhoTmp,1,rho,1));
 
@@ -435,7 +435,7 @@ bool initSparse(host_vector<cudaStream_t>& streams,host_vector<cublasHandle_t>& 
 	host_vector<int> numbers=dHierarchies;
 	int kMax=Param::KMax;
 	host_vector<Complex> nu=dNu;
-	
+
 	host_vector<Complex> consts(5);
 	consts[0]=make_Complex(0.0,0.0);
 	consts[1]=make_Complex(1.0,0.0);
@@ -472,7 +472,7 @@ bool initSparse(host_vector<cudaStream_t>& streams,host_vector<cublasHandle_t>& 
 		for(int i=1;i<kMax+1;i++)
 		{
 			double jNuD=-nu[i].x*numbers[index*(kMax+1)+i];
-			tmp[index+hierarchySize*(i-1)]=make_Complex(KPhi[i-1].x*jNuD,KPhi[i-1].y*jNuD); 
+			tmp[index+hierarchySize*(i-1)]=make_Complex(KPhi[i-1].x*jNuD,KPhi[i-1].y*jNuD);
 		}
 		double ngamma=-nu[0].x*numbers[index*(kMax+1)];
 		tmp[index+hierarchySize*(kMax+1)]=make_Complex(ngamma*KThetaCommutate.x,ngamma*KThetaCommutate.y);
@@ -540,29 +540,29 @@ void getdRhoSparse(const device_vector<Complex>& rhoVec,device_vector<Complex>& 
 	{
 		int index=i;
 		int indexmMinus1=edges[index*(kMax*2+2)+kMax+1];
-		//phi          
+		//phi
 		for(int k=0;k<kMax+1;k++)
 		{
 			int indexkPlus1=edges[index*(kMax*2+2)+k];
 			addMatrix(blasHandles[index],n,pMinusiCnt,pdRho+index*n*n,buffer+indexkPlus1*n*n);
 		}
-	
+
 		//psi
 		for(int k=1;k<kMax+1;k++)
 		{
 			int indexkMinus1=edges[index*(kMax*2+2)+kMax+1+k];
 			addMatrix(blasHandles[index],n,&pCoefficients[index+hierarchySize*(k-1)],pdRho+index*n*n,buffer+indexkMinus1*n*n);
 		}
-		
+
 		//theta
 		addMatrix(blasHandles[index],n,&pCoefficients[index+hierarchySize*(kMax+1)],pdRho+index*n*n,buffer+indexmMinus1*n*n);
-	
+
 		//theta2
 		//addAntiCommutateHost(blasHandles[index],pdRho+index*n*n,v,pRho+indexmMinus1*n*n,&pCoefficients[index+hierarchySize*(kMax+2)],n);
 		addAntiCommutateSparse(sparseHandles[i],streams[i],MatDescr,
 			raw_pointer_cast(dVElements.data()),raw_pointer_cast(dVColumns.data()),raw_pointer_cast(dVOffsets.data()),
 			vSize,pRho+indexmMinus1*n*n,&pCoefficients[index+hierarchySize*(kMax+2)],n,pdRho+index*n*n);
-		
+
 		//Sigma
 		addMatrix(blasHandles[index],n,&pCoefficients[index+hierarchySize*(kMax+3)],pdRho+index*n*n,pRho+index*n*n);
 
@@ -571,14 +571,14 @@ void getdRhoSparse(const device_vector<Complex>& rhoVec,device_vector<Complex>& 
 		addCommutateSparse(sparseHandles[i],streams[i],MatDescr,
 			raw_pointer_cast(dVElements.data()),raw_pointer_cast(dVColumns.data()),raw_pointer_cast(dVOffsets.data()),
 			vSize,buffer+index*n*n,&pCoefficients[index+hierarchySize*(kMax+4)],&pCoefficients[index+hierarchySize*(kMax+5)],n,pdRho+index*n*n);
-	
+
 	#ifdef USE_COUNTER
 		//addAntiCommutateHost(blasHandles[index],pdRho+index*n*n,v,buffer+index*n*n,&pCoefficients[index+hierarchySize*(kMax+6)],n);
 		addAntiCommutateSparse(sparseHandles[i],streams[i],MatDescr,
 			raw_pointer_cast(dVElements.data()),raw_pointer_cast(dVColumns.data()),raw_pointer_cast(dVOffsets.data()),
 			vSize,buffer+index*n*n,&pCoefficients[index+hierarchySize*(kMax+6)],n,pdRho+index*n*n);
 	#endif
-	
+
 	}
 	cudaDeviceSynchronize();
 }

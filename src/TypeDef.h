@@ -26,11 +26,11 @@ HEOM_CUBLAS_CALLABLE static __forceinline__ cublasStatus_t cublasScal(cublasHand
 {
 	return cublasCscal(handle,n,alpha,x,incx);
 }
-__host__ __device__ static __forceinline__ Complex 
+__host__ __device__ static __forceinline__ Complex
 operator*(const Complex &a,const Complex &b) {
 	return cuCmulf(a,b);
 }
-__host__ __device__ static __forceinline__ Complex 
+__host__ __device__ static __forceinline__ Complex
 operator+(const Complex &a,const Complex &b) {
 	return cuCaddf(a,b);
 }
@@ -100,11 +100,11 @@ HEOM_CUBLAS_CALLABLE static __forceinline__ cublasStatus_t cublasScal(cublasHand
 {
 	return cublasZscal(handle,n,alpha,x,incx);
 }
-__host__ __device__ static __forceinline__ Complex 
+__host__ __device__ static __forceinline__ Complex
 operator*(const Complex &a,const Complex &b) {
 	return cuCmul(a,b);
 }
-__host__ __device__ static __forceinline__ Complex 
+__host__ __device__ static __forceinline__ Complex
 operator+(const Complex &a,const Complex &b) {
 	return cuCadd(a,b);
 }
