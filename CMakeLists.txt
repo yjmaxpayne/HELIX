@@ -39,3 +39,23 @@ set_target_properties(helix PROPERTIES
     CUDA_SEPARABLE_COMPILATION ON
     CUDA_RESOLVE_DEVICE_SYMBOLS ON
 )
+
+option(HELIX_BUILD_TESTS "Build HELIX test executables" ON)
+
+if(HELIX_BUILD_TESTS)
+    enable_testing()
+
+    add_executable(initialize_detail_tests
+        tests/InitializeDetailTests.cu
+    )
+
+    target_include_directories(initialize_detail_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+
+    set_target_properties(initialize_detail_tests PROPERTIES
+        CUDA_ARCHITECTURES "${HELIX_CUDA_ARCHITECTURES}"
+    )
+
+    add_test(NAME initialize_detail_tests COMMAND initialize_detail_tests)
+endif()
