@@ -26,9 +26,9 @@ __global__ void transpose(Complex* idata, int n, const int blockRows )
 		{
 			block[ threadIdx.y + i ][ threadIdx.x ] = idata[ index + i * n];
 		}
-		
+
 		__syncthreads();
-		
+
 		for( int i = 0; i < TILE_DIM; i += blockRows )
 		{
 			idata[ index + i * n] = block[ threadIdx.x ][ threadIdx.y + i ];
@@ -45,9 +45,9 @@ __global__ void transpose(Complex* idata, int n, const int blockRows )
 			block[ threadIdx.y + i ][ threadIdx.x ] = idata[ index + i * n];
 			block[ threadIdx.y + i+TILE_DIM ][ threadIdx.x ] = idata[ transIndex + i];
 		}
-		
+
 		__syncthreads();
-		
+
 		for( int i = 0; i < TILE_DIM; i += blockRows )
 		{
 			idata[transIndex + i] = block[ threadIdx.y+i ][ threadIdx.x ];

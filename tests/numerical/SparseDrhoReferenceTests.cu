@@ -1,0 +1,93 @@
+#include "Initialize.h"
+#include "Liouville.h"
+#include "Matrixes.h"
+#include "Parameters.h"
+#include "support/Assert.h"
+#include "support/NumericalInvariants.h"
+
+#include <cuda_runtime.h>
+#include <iostream>
+#include <thrust/host_vector.h>
+
+namespace {
+
+#ifdef SINGLE
+constexpr const char* kPrecision = "single";
+constexpr double kAbsTolerance = 1.0e-5;
+constexpr double kRelTolerance = 1.0e-5;
+#else
+constexpr const char* kPrecision = "double";
+constexpr double kAbsTolerance = 1.0e-10;
+constexpr double kRelTolerance = 1.0e-10;
+#endif
+
+void cleanupRuntime()
+{
+	clearLiouvilleStorage();
+	clearMatrixStorage();
+	if(cublasHandle != nullptr)
+	{
+		cublasDestroy(cublasHandle);
+		cublasHandle = nullptr;
+	}
+}
+
+void printReferenceInput()
+{
+	std::cout << "reference_input: precision=" << kPrecision << " system_size=" << Param::N
+			  << " hierarchy_size=" << hierarchySize << " step=" << Param::Step
+			  << " integration_order=" << Param::IntegrationNum
+			  << " toy_profile=disabled(default configuration MVP)" << '\n';
+}
+
+void testSparseDrhoInvariants(helix::test::Reporter& test)
+{
+	initialize();
+	printReferenceInput();
+
+	device_vector<Complex> derivative(dRho.size(), make_Complex(0.0, 0.0));
+	getdRhoSparse(dRho, derivative);
+	test.expect(cudaDeviceSynchronize() == cudaSuccess, "sparse dRho computation completes");
+
+	const thrust::host_vector<Complex> actual = derivative;
+	test.expect(helix::test::allFinite(actual), "sparse dRho values remain finite");
+
+	const helix::test::DiffStats traceDiff = helix::test::compareScalar(
+		helix::test::traceBlock(actual, Param::N, 0),
+		helix::test::ComplexScalar{0.0, 0.0});
+	helix::test::printDiffStats(
+		std::cout,
+		"sparse_dRho_trace",
+		traceDiff,
+		kAbsTolerance,
+		kRelTolerance,
+		"trace conservation derivative for reduced density matrix");
+	test.expect(
+		traceDiff.maxAbs <= kAbsTolerance && traceDiff.maxRel <= kRelTolerance,
+		"sparse dRho reduced trace derivative remains zero within tolerance");
+
+	const helix::test::DiffStats hermiticityDiff = helix::test::hermiticityDiffBlock(actual, Param::N, 0);
+	helix::test::printDiffStats(
+		std::cout,
+		"sparse_dRho_hermiticity",
+		hermiticityDiff,
+		kAbsTolerance,
+		kRelTolerance,
+		"Hermiticity preservation for reduced density derivative");
+	test.expect(
+		hermiticityDiff.maxAbs <= kAbsTolerance && hermiticityDiff.maxRel <= kRelTolerance,
+		"sparse dRho reduced block remains Hermitian within tolerance");
+
+	cleanupRuntime();
+}
+
+} // namespace
+
+int main()
+{
+	helix::test::Reporter test;
+
+	testSparseDrhoInvariants(test);
+
+	return test.finish("sparse dRho reference tests");
+}

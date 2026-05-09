@@ -5,20 +5,42 @@ This repository is a legacy CUDA HEOM codebase under active refactoring and mode
 ## Development Workflow
 
 1. Create a branch from `main`.
-2. Build with CMake before opening a pull request:
+2. Install the local Git hooks once per checkout:
+
+   ```bash
+   python -m pip install -e ".[dev]"
+   pre-commit install --hook-type pre-commit --hook-type commit-msg
+   ```
+
+   Run the full hook set before sending larger changes:
+
+   ```bash
+   pre-commit run --all-files
+   ```
+
+   The default hooks cover file hygiene, Python linting/formatting, shell syntax,
+   generated-output guards, and Conventional Commit message validation. The
+   C++/CUDA clang-format hook is available as a manual hook because the legacy
+   source tree is still being modernized incrementally:
+
+   ```bash
+   pre-commit run clang-format --all-files --hook-stage manual
+   ```
+
+3. Build with CMake before opening a pull request:
 
    ```bash
    cmake -S . -B build/cmake -DCMAKE_BUILD_TYPE=Release
    cmake --build build/cmake --parallel "$(nproc)"
    ```
 
-3. Run the quick example smoke test:
+4. Run the quick example smoke test:
 
    ```bash
    HELIX_STEPS=2 scripts/verify_examples.sh
    ```
 
-4. For changes affecting numerics, also run the full baseline:
+5. For changes affecting numerics, also run the full baseline:
 
    ```bash
    HELIX_STEPS=1980 scripts/verify_examples.sh

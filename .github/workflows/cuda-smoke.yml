@@ -16,6 +16,11 @@ on:
         required: true
         default: "89"
         type: string
+      run_sanitizer:
+        description: Run compute-sanitizer memcheck profile
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -32,6 +37,8 @@ jobs:
     env:
       HELIX_STEPS: ${{ github.event.inputs.steps || '2' }}
       HELIX_CUDA_ARCHITECTURES: ${{ github.event.inputs.cuda_architectures || '89' }}
+      HELIX_BUILD_DIR: ${{ runner.temp }}/helix-build
+      HELIX_RUN_DIR: ${{ runner.temp }}/helix-run
     steps:
       - name: Check out
         uses: actions/checkout@v6
@@ -42,11 +49,23 @@ jobs:
           nvcc --version
           cmake --version
 
-      - name: Build and verify example prefix
+      - name: Configure
+        run: cmake -S . -B "${HELIX_BUILD_DIR}" -DCMAKE_BUILD_TYPE=Release -DHELIX_CUDA_ARCHITECTURES="${HELIX_CUDA_ARCHITECTURES}"
+
+      - name: Build
+        run: cmake --build "${HELIX_BUILD_DIR}" --parallel "$(nproc)"
+
+      - name: Run unit CTest label
+        run: ctest --test-dir "${HELIX_BUILD_DIR}" -L unit --output-on-failure
+
+      - name: Run CUDA CTest label
+        run: ctest --test-dir "${HELIX_BUILD_DIR}" -L cuda --output-on-failure
+
+      - name: Run integration CTest label
+        run: ctest --test-dir "${HELIX_BUILD_DIR}" -L integration --output-on-failure
+
+      - name: Verify script compatibility smoke
         run: scripts/verify_examples.sh
-        env:
-          HELIX_BUILD_DIR: ${{ runner.temp }}/helix-build
-          HELIX_RUN_DIR: ${{ runner.temp }}/helix-run
 
       - name: Upload smoke outputs
         if: always()
@@ -56,5 +75,52 @@ jobs:
           path: |
             ${{ runner.temp }}/helix-run/output*.txt
             ${{ runner.temp }}/helix-run/snapshot_rho*.dat
+            ${{ runner.temp }}/helix-run/energy_compare_summary.txt
+            ${{ runner.temp }}/helix-build/helix-smoke-integration/**/output*.txt
+            ${{ runner.temp }}/helix-build/helix-smoke-integration/**/snapshot_rho*.dat
+            ${{ runner.temp }}/helix-build/Testing/Temporary/LastTest.log
+            ${{ runner.temp }}/helix-build/Testing/Temporary/LastTestsFailed.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+  cuda-sanitizer:
+    name: CUDA memcheck sanitizer
+    if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.run_sanitizer == 'true' }}
+    runs-on: self-hosted
+    timeout-minutes: 30
+    env:
+      HELIX_CUDA_ARCHITECTURES: ${{ github.event.inputs.cuda_architectures || '89' }}
+      HELIX_BUILD_DIR: ${{ runner.temp }}/helix-sanitizer-build
+      HELIX_SANITIZER_REPORT_DIR: ${{ runner.temp }}/helix-sanitizer-reports
+    steps:
+      - name: Check out
+        uses: actions/checkout@v6
+
+      - name: Show GPU and CUDA tools
+        run: |
+          nvidia-smi
+          nvcc --version
+          compute-sanitizer --version
+          cmake --version
+
+      - name: Configure
+        run: cmake -S . -B "${HELIX_BUILD_DIR}" -DCMAKE_BUILD_TYPE=Release -DHELIX_CUDA_ARCHITECTURES="${HELIX_CUDA_ARCHITECTURES}"
+
+      - name: Build
+        run: cmake --build "${HELIX_BUILD_DIR}" --parallel "$(nproc)"
+
+      - name: Run sanitizer CTest label
+        run: ctest --test-dir "${HELIX_BUILD_DIR}" -L sanitizer --output-on-failure
+
+      - name: Upload sanitizer reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: cuda-sanitizer-reports
+          path: |
+            ${{ runner.temp }}/helix-sanitizer-reports/*.log
+            ${{ runner.temp }}/helix-sanitizer-reports/*.txt
+            ${{ runner.temp }}/helix-sanitizer-build/Testing/Temporary/LastTest.log
+            ${{ runner.temp }}/helix-sanitizer-build/Testing/Temporary/LastTestsFailed.log
           if-no-files-found: ignore
           retention-days: 7

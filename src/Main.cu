@@ -3,6 +3,7 @@
 #include "Initialize.h"
 #include "Liouville.h"
 #include "operators.h"
+#include "HelixVersion.h"
 #include "cuda_runtime.h"
 #include "TypeDef.h"
 #include "device_launch_parameters.h"
@@ -20,6 +21,7 @@
 #include <vector>
 #include <climits>
 #include <cstdlib>
+#include <cstring>
 
 using namespace std;
 
@@ -118,21 +120,27 @@ void waitForOutputThreads()
 	outputThreads.clear();
 }
 
-int main()
+int main(int argc, char** argv)
 {
+	if(argc == 2 && (std::strcmp(argv[1], "--version") == 0 || std::strcmp(argv[1], "-V") == 0))
+	{
+		cout << "HELIX " << HELIX_VERSION << endl;
+		return 0;
+	}
+
 	initialize();
-	
+
 	float cuTime=0.0f;
 	cudaEvent_t start,stop;
 	cudaEventCreate(&start);
 	cudaEventCreate(&stop);
-	
+
 	clock_t startTime, endTime;
 	int stepnum=readStepCount();
 	ofstream output;
 	energyStream=ofstream("outputEnergy.txt");
 	int logCutNum=Param::OutputNum*1000;
-	
+
 	host_vector<Complex> rhoTmp=dRho;
 	cudaEventRecord(start,0);
 	startTime = clock();
@@ -152,7 +160,7 @@ int main()
 				sss<<"output_rho";
 				sss<<outnum;
 				sss<<".txt";
-				
+
 				output.open(sss.str(),ios::out);
 
 				std::stringstream ssss;
@@ -188,8 +196,8 @@ int main()
 		}
 		time+=Param::Step;
 		develop();
-		
-		
+
+
 	}
     cudaEventRecord(stop,0);
     cudaEventSynchronize(stop);

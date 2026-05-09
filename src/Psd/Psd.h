@@ -2,8 +2,6 @@
 #define PSDDEF
 
 #include "thrust/host_vector.h"
-#include "thrust/device_vector.h"
-#include "cublas_v2.h"
 
 enum PadeType
 {

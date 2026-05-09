@@ -26,17 +26,27 @@ jobs:
           test -f README.md
           test -f CONTRIBUTING.md
           test -f SECURITY.md
+          test -f CHANGELOG.md
           test -f CMakeLists.txt
+          test -f cmake/HelixVersion.cmake
+          test -f .github/release-drafter.yml
           test -x scripts/verify_examples.sh
           test -x scripts/package_release.sh
 
       - name: Check shell syntax
         run: bash -n scripts/verify_examples.sh scripts/package_release.sh
 
+      - name: Check Release Drafter trigger contract
+        run: |
+          if grep -En '^[[:space:]]*pull_request(_target)?:' .github/workflows/release-drafter.yml; then
+            echo "Release Drafter must not run on pull request events because its config is read from the default branch." >&2
+            exit 1
+          fi
+
       - name: Check generated artifacts are not tracked
         run: |
           tracked_generated="$(git ls-files \
-            | grep -E '(^build/|(^|/)(output\.txt|outputEnergy\.txt|output_rho[0-9]+\.txt|snapshot_rho[0-9]+\.dat)$)' \
+            | grep -E '(^build/|^doc/build/|^doc/_doxygen/|(^|/)(output\.txt|outputEnergy\.txt|output_rho[0-9]+\.txt|snapshot_rho[0-9]+\.dat)$)' \
             | grep -v '^examples/outputEnergy\.txt$' || true)"
           if [[ -n "${tracked_generated}" ]]; then
             echo "${tracked_generated}"

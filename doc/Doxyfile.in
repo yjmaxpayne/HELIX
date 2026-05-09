@@ -1,0 +1,57 @@
+# Doxygen configuration template for HELIX C++/CUDA API documentation.
+#
+# This file mirrors the CUDA-Q documentation pattern: keep a tracked template,
+# generate the concrete Doxyfile under doc/_doxygen/, and let Sphinx/Breathe
+# consume the generated XML.
+
+DOXYFILE_ENCODING      = UTF-8
+PROJECT_NAME           = "HELIX"
+PROJECT_BRIEF          = "GPU-accelerated HEOM source reference"
+PROJECT_LOGO           = "@PROJECT_ROOT@/doc/source/_static/logo.png"
+OUTPUT_DIRECTORY       = "@DOXYGEN_OUTPUT_DIR@"
+CREATE_SUBDIRS         = NO
+OUTPUT_LANGUAGE        = English
+
+QUIET                  = YES
+WARNINGS               = YES
+WARN_IF_UNDOCUMENTED   = NO
+WARN_IF_DOC_ERROR      = YES
+WARN_AS_ERROR          = NO
+
+INPUT                  = "@PROJECT_ROOT@/src"
+RECURSIVE              = YES
+FILE_PATTERNS          = *.h *.cu
+STRIP_FROM_PATH        = "@PROJECT_ROOT@"
+
+EXTRACT_ALL            = YES
+EXTRACT_PRIVATE        = NO
+EXTRACT_STATIC         = YES
+HIDE_UNDOC_MEMBERS     = NO
+HIDE_UNDOC_CLASSES     = NO
+
+ENABLE_PREPROCESSING   = YES
+MACRO_EXPANSION        = YES
+EXPAND_ONLY_PREDEF     = NO
+PREDEFINED             = __global__= \
+                         __device__= \
+                         __host__= \
+                         __forceinline__= \
+                         __shared__= \
+                         __restrict__= \
+                         SINGLE
+
+EXTENSION_MAPPING      = cu=C++
+OPTIMIZE_OUTPUT_FOR_C  = NO
+OPTIMIZE_OUTPUT_JAVA   = NO
+
+GENERATE_HTML          = NO
+GENERATE_LATEX         = NO
+GENERATE_XML           = YES
+XML_OUTPUT             = xml
+XML_PROGRAMLISTING     = YES
+
+FULL_PATH_NAMES        = YES
+REFERENCED_BY_RELATION = YES
+REFERENCES_RELATION    = YES
+SOURCE_BROWSER         = YES
+INLINE_SOURCES         = NO
