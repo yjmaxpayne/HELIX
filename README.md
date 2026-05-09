@@ -6,13 +6,6 @@
   <img src="https://img.shields.io/badge/CMake-3.24%2B-064F8C.svg?logo=cmake&logoColor=white" alt="CMake 3.24+">
   <img src="https://img.shields.io/badge/License-MIT-orange.svg" alt="License: MIT">
   <img src="https://img.shields.io/badge/Status-Modernizing-yellow.svg" alt="Project Status">
-  <a href="https://github.com/yjmaxpayne/HELIX/actions/workflows/cuda-smoke.yml">
-    <img src="https://github.com/yjmaxpayne/HELIX/actions/workflows/cuda-smoke.yml/badge.svg" alt="CUDA Smoke">
-  </a>
-  <a href="https://github.com/yjmaxpayne/HELIX/actions/workflows/numerical-baseline.yml">
-    <img src="https://github.com/yjmaxpayne/HELIX/actions/workflows/numerical-baseline.yml/badge.svg" alt="Numerical Baseline">
-  </a>
-  <br>
   <img src="https://img.shields.io/badge/HEOM-GPU--Accelerated-6A5ACD.svg" alt="GPU-accelerated HEOM">
   <img src="https://img.shields.io/badge/NVIDIA-GPU%20Required-76B900.svg?logo=nvidia&logoColor=white" alt="NVIDIA GPU required">
   <img src="https://img.shields.io/badge/cuBLAS%20%2F%20cuSPARSE-Required-76B900.svg?logo=nvidia&logoColor=white" alt="cuBLAS/cuSPARSE required">
