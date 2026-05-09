@@ -23,6 +23,19 @@ jobs:
     steps:
       - name: Check out
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Resolve documentation version
+        run: |
+          docs_tag="$(git describe --tags --match 'v[0-9]*' --abbrev=0 2>/dev/null || true)"
+          if [[ -n "${docs_tag}" ]]; then
+            docs_version="${docs_tag#v}"
+          else
+            docs_version="$(python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')"
+          fi
+          echo "HELIX_DOCS_VERSION=${docs_version}" >> "${GITHUB_ENV}"
+          echo "Resolved documentation version: ${docs_version}"
 
       - name: Install Doxygen
         run: |

@@ -21,6 +21,10 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 
 def _get_doc_version() -> str:
+    env_version = os.environ.get("HELIX_DOCS_VERSION", "").strip()
+    if env_version:
+        return env_version.removeprefix("v")
+
     try:
         from dunamai import Style, Version
 

@@ -107,6 +107,7 @@ jobs:
     env:
       RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || github.event.inputs.tag }}
       GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
     steps:
       - name: Download release package
         uses: actions/download-artifact@v8
@@ -121,12 +122,13 @@ jobs:
             prerelease_args+=(--prerelease)
           fi
 
-          if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
-            gh release upload "${RELEASE_TAG}" dist/* --clobber
-            gh release edit "${RELEASE_TAG}" --draft=false "${prerelease_args[@]}"
+          if gh release view "${RELEASE_TAG}" --repo "${GH_REPO}" >/dev/null 2>&1; then
+            gh release upload "${RELEASE_TAG}" dist/* --clobber --repo "${GH_REPO}"
+            gh release edit "${RELEASE_TAG}" --repo "${GH_REPO}" --draft=false "${prerelease_args[@]}"
           else
             gh release create "${RELEASE_TAG}" dist/* \
               --title "HELIX ${RELEASE_TAG}" \
+              --repo "${GH_REPO}" \
               --generate-notes \
               "${prerelease_args[@]}"
           fi
