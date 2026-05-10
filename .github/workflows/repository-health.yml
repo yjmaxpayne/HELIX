@@ -28,7 +28,7 @@ jobs:
           test -f SECURITY.md
           test -f CHANGELOG.md
           test -f CMakeLists.txt
-          test -f cmake/HelixVersion.cmake
+          test -f cmake/helix_version.cmake
           test -f .github/release-drafter.yml
           test -x scripts/verify_examples.sh
           test -x scripts/package_release.sh

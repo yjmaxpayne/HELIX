@@ -26,12 +26,12 @@ Project Structure
 
    HELIX/
    ├── src/                    # C++/CUDA production source
-   │   ├── Psd/                # Pade spectrum decomposition helpers
-   │   ├── Main.cu             # Legacy executable workflow
-   │   ├── Initialize.*        # System, bath, hierarchy, rho setup
-   │   ├── Liouville.*         # Propagation and dRho evaluation
-   │   ├── Matrixes.*          # Global device storage lifecycle
-   │   └── TypeDef.h           # Scalar aliases and CUDA wrappers
+   │   ├── psd/                # Pade spectrum decomposition helpers
+   │   ├── main.cu             # Legacy executable workflow
+   │   ├── initialize.*        # System, bath, hierarchy, rho setup
+   │   ├── liouville.*         # Propagation and dRho evaluation
+   │   ├── matrix_storage.*    # Global device storage lifecycle
+   │   └── cuda_types.h        # Scalar aliases and CUDA wrappers
    ├── tests/                  # Unit, CUDA, numerical, integration tests
    ├── examples/               # Checked-in reference output
    ├── scripts/                # Verification and release helpers

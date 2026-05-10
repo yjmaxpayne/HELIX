@@ -17,25 +17,25 @@ That keeps anonymous implementation namespaces out of the C++ API surface.
    Parameters
    ----------
 
-   .. doxygenfile:: Parameters.h
+   .. doxygenfile:: parameters.h
       :project: HELIX
 
    Compile-Time Profile
    --------------------
 
-   .. doxygenfile:: DefineParameters.h
+   .. doxygenfile:: legacy_compile_options.h
       :project: HELIX
 
    Scalar and CUDA Compatibility Types
    -----------------------------------
 
-   .. doxygenfile:: TypeDef.h
+   .. doxygenfile:: cuda_types.h
       :project: HELIX
 
    Initialization
    --------------
 
-   .. doxygenfile:: Initialize.h
+   .. doxygenfile:: initialize.h
       :project: HELIX
 
    .. doxygennamespace:: initialize_detail
@@ -45,23 +45,23 @@ That keeps anonymous implementation namespaces out of the C++ API surface.
    Liouville Propagation
    ---------------------
 
-   .. doxygenfile:: Liouville.h
+   .. doxygenfile:: liouville.h
       :project: HELIX
 
    Matrix Storage and Utilities
    ----------------------------
 
-   .. doxygenfile:: Matrixes.h
+   .. doxygenfile:: matrix_storage.h
       :project: HELIX
 
-   .. doxygenfile:: MatrixUtil.h
+   .. doxygenfile:: matrix_util.h
       :project: HELIX
 
    Pade Spectrum Decomposition
    ---------------------------
 
-   .. doxygenfile:: Psd.h
+   .. doxygenfile:: psd.h
       :project: HELIX
 
-   .. doxygenfile:: Eigval.h
+   .. doxygenfile:: eigenvalues.h
       :project: HELIX

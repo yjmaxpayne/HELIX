@@ -99,6 +99,8 @@ Current full verification on the environment above, from the 2026-05-09 final ba
 ## Notes
 
 - The default numerical path is the sparse host cuBLAS/cuSPARSE path. The old `DYNAMIC_DENSE` path depends on device-side cuBLAS patterns from older CUDA releases and is not enabled.
+- The public C++ adapter `helix::examples::legacy_spin_glass_system()` exposes the current hard-coded spin-glass model only as a compatibility example. It is not a generic `System` schema, and arbitrary sparse systems still return unsupported execution diagnostics rather than silently running the hard-coded model.
+- `helix::Bath::drude_lorentz_pade()` and `helix::HierarchySpec::compiled_default()` map the current compiled Drude-Lorentz/Pade and hierarchy defaults. Non-default bath or hierarchy fields are reported as constrained in v0.1.
 - CUDA 13 removed legacy `cusparseCcsrmm/csrmm2`; this tree uses a compatibility wrapper around `cusparseSpMM`.
 
 ## Documentation

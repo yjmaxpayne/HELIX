@@ -10,22 +10,22 @@ Architecture Mapping
 .. code-block:: text
 
    src/                         responsibility
-   ├── Main.cu                  executable workflow and output files
-   ├── Initialize.*             system, bath, hierarchy, rho initialization
-   ├── InitializeDetail.h       test-backed host helper extraction point
-   ├── Liouville.*              HEOM propagation and dRho evaluation
-   ├── Matrixes.*               global device storage lifecycle
-   ├── MatrixUtil.*             CUDA matrix utilities
-   ├── Parameters.*             static defaults and global cublasHandle
-   ├── TypeDef.h                scalar aliases and CUDA compatibility wrappers
-   └── Psd/                     Pade spectrum decomposition helpers
+   ├── main.cu                  executable workflow and output files
+   ├── initialize.*             system, bath, hierarchy, rho initialization
+   ├── initialize_detail.h      test-backed host helper extraction point
+   ├── liouville.*              HEOM propagation and dRho evaluation
+   ├── matrix_storage.*         global device storage lifecycle
+   ├── matrix_util.*             CUDA matrix utilities
+   ├── parameters.*             static defaults and global cublasHandle
+   ├── cuda_types.h             scalar aliases and CUDA compatibility wrappers
+   └── psd/                     Pade spectrum decomposition helpers
 
 Conventions
 -----------
 
 * Declarations live in ``*.h`` files; implementation lives in ``*.cu`` files.
 * Legacy source files use tabs for block indentation.
-* Major headers and types use PascalCase.
+* Source and test file names use ``lower_snake_case``.
 * Local helper functions generally use camelCase.
 * Generated API pages are implementation references, not ABI promises.
 

@@ -22,7 +22,7 @@ The default build profile uses:
 Bath Expansion
 --------------
 
-``src/Psd/`` computes Pade spectrum decomposition poles and residues. These
+``src/psd/`` computes Pade spectrum decomposition poles and residues. These
 values feed ``setTemperatureDependence()``, which initializes bath frequencies
 and HEOM coefficients used by the Liouville propagation path.
 

@@ -1,10 +1,12 @@
 cmake_minimum_required(VERSION 3.24)
 
-include(cmake/HelixVersion.cmake)
+include(cmake/helix_version.cmake)
 
 project(HELIX VERSION ${HELIX_VERSION} LANGUAGES CXX CUDA)
 
 find_package(CUDAToolkit REQUIRED)
+include(GNUInstallDirs)
+include(CMakePackageConfigHelpers)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -12,9 +14,11 @@ set(CMAKE_CUDA_STANDARD 17)
 set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 
 set(HELIX_GENERATED_INCLUDE_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
+set(HELIX_CMAKE_INSTALL_DIR "${CMAKE_INSTALL_LIBDIR}/cmake/HELIX")
+file(MAKE_DIRECTORY "${HELIX_GENERATED_INCLUDE_DIR}/helix")
 configure_file(
-    src/HelixVersion.h.in
-    "${HELIX_GENERATED_INCLUDE_DIR}/HelixVersion.h"
+    cmake/helix_version_config.h.in
+    "${HELIX_GENERATED_INCLUDE_DIR}/helix/version_config.h"
     @ONLY
 )
 message(STATUS "HELIX version: ${HELIX_VERSION_STRING} (${HELIX_VERSION_SOURCE})")
@@ -25,9 +29,9 @@ if(DEFINED HEOM_CUDA_ARCHITECTURES)
 endif()
 
 add_library(helix_host_core STATIC
-    src/Parameters.cu
-    src/Psd/Eigval.cu
-    src/Psd/Psd.cu
+    src/parameters.cu
+    src/psd/eigenvalues.cu
+    src/psd/psd.cu
 )
 
 target_include_directories(helix_host_core PUBLIC
@@ -38,12 +42,44 @@ set_target_properties(helix_host_core PROPERTIES
     CUDA_ARCHITECTURES "${HELIX_CUDA_ARCHITECTURES}"
 )
 
+add_library(helix_core STATIC
+    src/helix.cpp
+    src/library/legacy_runtime_session.cu
+    src/parameters.cu
+    src/psd/eigenvalues.cu
+    src/psd/psd.cu
+    src/initialize.cu
+    src/liouville.cu
+    src/matrix_storage.cu
+    src/matrix_util.cu
+)
+
+add_library(HELIX::helix ALIAS helix_core)
+
+target_include_directories(helix_core
+    PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        $<BUILD_INTERFACE:${HELIX_GENERATED_INCLUDE_DIR}>
+        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+
+target_link_libraries(helix_core PRIVATE
+    CUDA::cublas
+    CUDA::cusparse
+)
+
+set_target_properties(helix_core PROPERTIES
+    OUTPUT_NAME helix
+    EXPORT_NAME helix
+    CUDA_ARCHITECTURES "${HELIX_CUDA_ARCHITECTURES}"
+    CUDA_SEPARABLE_COMPILATION ON
+    CUDA_RESOLVE_DEVICE_SYMBOLS ON
+)
+
 add_executable(helix
-    src/Main.cu
-    src/Initialize.cu
-    src/Liouville.cu
-    src/Matrixes.cu
-    src/MatrixUtil.cu
+    src/main.cu
 )
 
 target_include_directories(helix PRIVATE
@@ -52,7 +88,7 @@ target_include_directories(helix PRIVATE
 )
 
 target_link_libraries(helix PRIVATE
-    helix_host_core
+    helix_core
     CUDA::cublas
     CUDA::cusparse
 )
@@ -61,6 +97,54 @@ set_target_properties(helix PROPERTIES
     CUDA_ARCHITECTURES "${HELIX_CUDA_ARCHITECTURES}"
     CUDA_SEPARABLE_COMPILATION ON
     CUDA_RESOLVE_DEVICE_SYMBOLS ON
+)
+
+install(TARGETS helix_core
+    EXPORT HELIXTargets
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
+
+install(TARGETS helix
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
+
+install(DIRECTORY include/
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+)
+
+install(FILES "${HELIX_GENERATED_INCLUDE_DIR}/helix/version_config.h"
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/helix
+)
+
+install(EXPORT HELIXTargets
+    FILE HELIXTargets.cmake
+    NAMESPACE HELIX::
+    DESTINATION ${HELIX_CMAKE_INSTALL_DIR}
+)
+
+configure_package_config_file(
+    cmake/HELIXConfig.cmake.in
+    "${CMAKE_CURRENT_BINARY_DIR}/HELIXConfig.cmake"
+    INSTALL_DESTINATION ${HELIX_CMAKE_INSTALL_DIR}
+)
+
+write_basic_package_version_file(
+    "${CMAKE_CURRENT_BINARY_DIR}/HELIXConfigVersion.cmake"
+    VERSION ${PROJECT_VERSION}
+    COMPATIBILITY SameMajorVersion
+)
+
+export(EXPORT HELIXTargets
+    FILE "${CMAKE_CURRENT_BINARY_DIR}/HELIXTargets.cmake"
+    NAMESPACE HELIX::
+)
+
+install(FILES
+    "${CMAKE_CURRENT_BINARY_DIR}/HELIXConfig.cmake"
+    "${CMAKE_CURRENT_BINARY_DIR}/HELIXConfigVersion.cmake"
+    DESTINATION ${HELIX_CMAKE_INSTALL_DIR}
 )
 
 option(HELIX_BUILD_TESTS "Build HELIX test executables" ON)
@@ -104,7 +188,7 @@ if(HELIX_BUILD_TESTS)
     endfunction()
 
     function(helix_add_test)
-        set(options GPU)
+        set(options GPU EXPECTED_FAIL)
         set(one_value_args NAME TARGET TIMEOUT)
         set(multi_value_args LABELS COMMAND)
         cmake_parse_arguments(HELIX_TEST "${options}" "${one_value_args}" "${multi_value_args}" ${ARGN})
@@ -152,6 +236,12 @@ if(HELIX_BUILD_TESTS)
             TIMEOUT "${HELIX_TEST_TIMEOUT}"
         )
 
+        if(HELIX_TEST_EXPECTED_FAIL)
+            set_tests_properties("${HELIX_TEST_NAME}" PROPERTIES
+                WILL_FAIL TRUE
+            )
+        endif()
+
         if(HELIX_TEST_GPU)
             set_tests_properties("${HELIX_TEST_NAME}" PROPERTIES
                 RESOURCE_LOCK gpu
@@ -159,8 +249,169 @@ if(HELIX_BUILD_TESTS)
         endif()
     endfunction()
 
+    set(HELIX_V01_EXPECTED_FAIL_SCRIPT
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/planned/expected_fail_gate.cmake
+    )
+
+    function(helix_add_v01_expected_fail_gate)
+        set(options GPU)
+        set(one_value_args NAME TASK REASON TIMEOUT)
+        set(multi_value_args LABELS)
+        cmake_parse_arguments(HELIX_V01_GATE "${options}" "${one_value_args}" "${multi_value_args}" ${ARGN})
+
+        if(NOT HELIX_V01_GATE_NAME)
+            message(FATAL_ERROR "helix_add_v01_expected_fail_gate requires NAME")
+        endif()
+        if(NOT HELIX_V01_GATE_TASK)
+            message(FATAL_ERROR "helix_add_v01_expected_fail_gate requires TASK")
+        endif()
+        if(NOT HELIX_V01_GATE_REASON)
+            message(FATAL_ERROR "helix_add_v01_expected_fail_gate requires REASON")
+        endif()
+        if(NOT HELIX_V01_GATE_TIMEOUT)
+            set(HELIX_V01_GATE_TIMEOUT 10)
+        endif()
+
+        set(gpu_arg)
+        if(HELIX_V01_GATE_GPU)
+            set(gpu_arg GPU)
+        endif()
+
+        helix_add_test(
+            NAME ${HELIX_V01_GATE_NAME}
+            COMMAND
+                ${CMAKE_COMMAND}
+                "-DHELIX_GATE_NAME=${HELIX_V01_GATE_NAME}"
+                "-DHELIX_GATE_TASK=${HELIX_V01_GATE_TASK}"
+                "-DHELIX_GATE_REASON=${HELIX_V01_GATE_REASON}"
+                -P ${HELIX_V01_EXPECTED_FAIL_SCRIPT}
+            LABELS ${HELIX_V01_GATE_LABELS}
+            TIMEOUT ${HELIX_V01_GATE_TIMEOUT}
+            EXPECTED_FAIL
+            ${gpu_arg}
+        )
+    endfunction()
+
+    # v0.1 library foundation gates remain expected failures until each
+    # downstream task replaces the placeholder with the real test.
+    add_executable(v01_public_header_compile_gate
+        tests/unit/public_header_compile_tests.cpp
+    )
+
+    target_link_libraries(v01_public_header_compile_gate PRIVATE
+        helix_core
+    )
+
+    helix_add_test(
+        NAME v01_public_header_compile_gate
+        TARGET v01_public_header_compile_gate
+        LABELS unit
+        TIMEOUT 10
+    )
+
+    helix_add_test(
+        NAME v01_external_consumer_cmake_gate
+        COMMAND
+            ${CMAKE_COMMAND}
+            -DHELIX_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
+            -DHELIX_BINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}
+            -DHELIX_TEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/external-consumer-smoke
+            -DHELIX_CUDA_ARCHITECTURES=${HELIX_CUDA_ARCHITECTURES}
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/external_consumer_smoke.cmake
+        LABELS integration
+        TIMEOUT 120
+    )
+
+    add_executable(api_schema_validation_tests
+        tests/unit/api_schema_validation_tests.cpp
+    )
+
+    target_link_libraries(api_schema_validation_tests PRIVATE
+        helix_core
+        helix_test_support
+    )
+
+    helix_add_test(
+        NAME v01_api_schema_validation_gate
+        TARGET api_schema_validation_tests
+        LABELS unit
+        TIMEOUT 10
+    )
+
+    add_executable(public_lifecycle_context_tests
+        tests/numerical/public_lifecycle_context_tests.cu
+    )
+
+    target_link_libraries(public_lifecycle_context_tests PRIVATE
+        helix_core
+        helix_test_support
+    )
+
+    target_include_directories(public_lifecycle_context_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+
+    set_target_properties(public_lifecycle_context_tests PROPERTIES
+        CUDA_ARCHITECTURES "${HELIX_CUDA_ARCHITECTURES}"
+        CUDA_SEPARABLE_COMPILATION ON
+        CUDA_RESOLVE_DEVICE_SYMBOLS ON
+    )
+
+    helix_add_test(
+        NAME v01_public_lifecycle_numerical_gate
+        TARGET public_lifecycle_context_tests
+        LABELS numerical
+        GPU
+        TIMEOUT 180
+    )
+
+    add_executable(public_solver_spin_glass_tests
+        tests/numerical/public_solver_spin_glass_tests.cu
+    )
+
+    target_link_libraries(public_solver_spin_glass_tests PRIVATE
+        helix_core
+        helix_test_support
+    )
+
+    target_include_directories(public_solver_spin_glass_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+
+    set_target_properties(public_solver_spin_glass_tests PROPERTIES
+        CUDA_ARCHITECTURES "${HELIX_CUDA_ARCHITECTURES}"
+        CUDA_SEPARABLE_COMPILATION ON
+        CUDA_RESOLVE_DEVICE_SYMBOLS ON
+    )
+
+    helix_add_test(
+        NAME v01_public_solver_spin_glass_gate
+        TARGET public_solver_spin_glass_tests
+        LABELS numerical
+        GPU
+        TIMEOUT 180
+    )
+
+    helix_add_v01_expected_fail_gate(
+        NAME v01_result_shape_no_file_output_gate
+        TASK T5
+        LABELS numerical integration
+        GPU
+        REASON "verify RunResult shape and core library no-file-output contract"
+        TIMEOUT 30
+    )
+
+    helix_add_v01_expected_fail_gate(
+        NAME v01_python_smoke_gate
+        TASK T7
+        LABELS integration
+        GPU
+        REASON "import experimental Python binding and check solver result shape"
+        TIMEOUT 30
+    )
+
     add_executable(initialize_detail_tests
-        tests/unit/InitializeDetailTests.cu
+        tests/unit/initialize_detail_tests.cu
     )
 
     target_link_libraries(initialize_detail_tests PRIVATE
@@ -180,7 +431,7 @@ if(HELIX_BUILD_TESTS)
     )
 
     add_executable(psd_reference_tests
-        tests/unit/PsdReferenceTests.cu
+        tests/unit/psd_reference_tests.cu
     )
 
     target_link_libraries(psd_reference_tests PRIVATE
@@ -200,7 +451,7 @@ if(HELIX_BUILD_TESTS)
     )
 
     add_executable(parameter_default_tests
-        tests/unit/ParameterDefaultTests.cu
+        tests/unit/parameter_default_tests.cu
     )
 
     target_link_libraries(parameter_default_tests PRIVATE
@@ -220,7 +471,7 @@ if(HELIX_BUILD_TESTS)
     )
 
     add_executable(energy_trace_comparator_tests
-        tests/unit/EnergyTraceComparatorTests.cpp
+        tests/unit/energy_trace_comparator_tests.cpp
     )
 
     target_link_libraries(energy_trace_comparator_tests PRIVATE
@@ -239,8 +490,8 @@ if(HELIX_BUILD_TESTS)
     )
 
     add_executable(transpose_cuda_tests
-        tests/cuda/TransposeTests.cu
-        src/MatrixUtil.cu
+        tests/cuda/transpose_tests.cu
+        src/matrix_util.cu
     )
 
     target_link_libraries(transpose_cuda_tests PRIVATE
@@ -273,14 +524,14 @@ if(HELIX_BUILD_TESTS)
             -DHELIX_SANITIZER_REPORT_DIR=${CMAKE_CURRENT_BINARY_DIR}/sanitizer
             -DHELIX_SANITIZER_TOOL=memcheck
             ${HELIX_COMPUTE_SANITIZER_DEFINITION}
-            -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/sanitizer/RunCudaSanitizer.cmake
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/sanitizer/run_cuda_sanitizer.cmake
         LABELS sanitizer
         GPU
         TIMEOUT 600
     )
 
     add_executable(cusparse_wrapper_cuda_tests
-        tests/cuda/CusparseWrapperTests.cu
+        tests/cuda/cusparse_wrapper_tests.cu
     )
 
     target_link_libraries(cusparse_wrapper_cuda_tests PRIVATE
@@ -305,11 +556,11 @@ if(HELIX_BUILD_TESTS)
     )
 
     add_executable(sparse_drho_reference_tests
-        tests/numerical/SparseDrhoReferenceTests.cu
-        src/Initialize.cu
-        src/Liouville.cu
-        src/Matrixes.cu
-        src/MatrixUtil.cu
+        tests/numerical/sparse_drho_reference_tests.cu
+        src/initialize.cu
+        src/liouville.cu
+        src/matrix_storage.cu
+        src/matrix_util.cu
     )
 
     target_link_libraries(sparse_drho_reference_tests PRIVATE
@@ -338,11 +589,11 @@ if(HELIX_BUILD_TESTS)
     )
 
     add_executable(one_step_evolution_tests
-        tests/numerical/OneStepEvolutionTests.cu
-        src/Initialize.cu
-        src/Liouville.cu
-        src/Matrixes.cu
-        src/MatrixUtil.cu
+        tests/numerical/one_step_evolution_tests.cu
+        src/initialize.cu
+        src/liouville.cu
+        src/matrix_storage.cu
+        src/matrix_util.cu
     )
 
     target_link_libraries(one_step_evolution_tests PRIVATE
@@ -371,11 +622,11 @@ if(HELIX_BUILD_TESTS)
     )
 
     add_executable(heom_lifecycle_contract_tests
-        tests/numerical/HeomLifecycleContractTests.cu
-        src/Initialize.cu
-        src/Liouville.cu
-        src/Matrixes.cu
-        src/MatrixUtil.cu
+        tests/numerical/heom_lifecycle_contract_tests.cu
+        src/initialize.cu
+        src/liouville.cu
+        src/matrix_storage.cu
+        src/matrix_util.cu
     )
 
     target_link_libraries(heom_lifecycle_contract_tests PRIVATE
@@ -404,7 +655,7 @@ if(HELIX_BUILD_TESTS)
     )
 
     add_executable(energy_trace_compare
-        tests/support/EnergyTraceCompareMain.cpp
+        tests/support/energy_trace_compare_main.cpp
     )
 
     target_link_libraries(energy_trace_compare PRIVATE
@@ -420,7 +671,7 @@ if(HELIX_BUILD_TESTS)
             -DHELIX_REFERENCE_ENERGY=${CMAKE_CURRENT_SOURCE_DIR}/examples/outputEnergy.txt
             -DHELIX_SMOKE_ROOT=${CMAKE_CURRENT_BINARY_DIR}/helix-smoke-integration
             -DHELIX_ENERGY_TOLERANCE=1e-5
-            -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/HelixSmokeIntegration.cmake
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/helix_smoke_integration.cmake
         LABELS integration baseline
         GPU
         TIMEOUT 300

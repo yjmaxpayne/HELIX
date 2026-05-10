@@ -17,7 +17,7 @@ CUDA 13 Compatibility
 ---------------------
 
 CUDA 13 removed legacy ``cusparseCcsrmm`` and ``cusparseCcsrmm2`` APIs. HELIX
-keeps source compatibility through wrappers in ``TypeDef.h`` that map those
+keeps source compatibility through wrappers in ``cuda_types.h`` that map those
 operations to ``cusparseSpMM``.
 
 Dynamic Dense Path

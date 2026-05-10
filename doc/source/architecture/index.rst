@@ -13,16 +13,16 @@ The CMake target graph has two production targets:
 .. code-block:: text
 
    helix_host_core
-     src/Parameters.cu
-     src/Psd/Eigval.cu
-     src/Psd/Psd.cu
+     src/parameters.cu
+     src/psd/eigenvalues.cu
+     src/psd/psd.cu
 
    helix
-     src/Main.cu
-     src/Initialize.cu
-     src/Liouville.cu
-     src/Matrixes.cu
-     src/MatrixUtil.cu
+     src/main.cu
+     src/initialize.cu
+     src/liouville.cu
+     src/matrix_storage.cu
+     src/matrix_util.cu
      links helix_host_core, CUDA::cublas, CUDA::cusparse
 
 ``helix_host_core`` owns host-side helpers and reference logic that can be used
@@ -60,7 +60,7 @@ steps.
 Numerical Profile
 -----------------
 
-The default compiled profile is defined in ``src/DefineParameters.h``:
+The default compiled profile is defined in ``src/legacy_compile_options.h``:
 
 * ``H_DIAGONAL`` is enabled.
 * ``USE_COUNTER`` is enabled.
@@ -77,12 +77,12 @@ State Ownership
 
 The current runtime uses explicit global state:
 
-* ``Matrixes.*`` owns global device vectors such as ``dH``, ``dV``, ``dNu``,
+* ``matrix_storage.*`` owns global device vectors such as ``dH``, ``dV``, ``dNu``,
   ``dRho``, hierarchy storage, sparse operator storage, and
   ``clearMatrixStorage()``.
-* ``Liouville.cu`` owns sparse propagation caches, CUDA streams, cuBLAS handles,
+* ``liouville.cu`` owns sparse propagation caches, CUDA streams, cuBLAS handles,
   cuSPARSE handles, the matrix descriptor, and ``clearLiouvilleStorage()``.
-* ``Parameters.*`` owns static default parameters and the global
+* ``parameters.*`` owns static default parameters and the global
   ``cublasHandle``.
 
 Cleanup is part of the runtime contract. Tests and integrations that call
@@ -94,7 +94,7 @@ GPU Execution
 
 The default propagation path is sparse and host-orchestrated. It uses cuSPARSE
 for sparse-dense products, cuBLAS for dense vector operations, CUDA streams per
-hierarchy row, and a CUDA 13 compatibility wrapper in ``TypeDef.h`` for the
+hierarchy row, and a CUDA 13 compatibility wrapper in ``cuda_types.h`` for the
 removed legacy ``cusparseCcsrmm`` and ``cusparseCcsrmm2`` entry points.
 
 The old dynamic dense path remains guarded behind ``DYNAMIC_DENSE`` and should
