@@ -78,6 +78,7 @@ set_target_properties(helix_core PROPERTIES
     CUDA_ARCHITECTURES "${HELIX_CUDA_ARCHITECTURES}"
     CUDA_SEPARABLE_COMPILATION ON
     CUDA_RESOLVE_DEVICE_SYMBOLS ON
+    POSITION_INDEPENDENT_CODE ON
 )
 
 add_executable(helix
@@ -150,7 +151,51 @@ install(FILES
     DESTINATION ${HELIX_CMAKE_INSTALL_DIR}
 )
 
+option(HELIX_BUILD_PYTHON "Build the experimental HELIX Python binding" OFF)
 option(HELIX_BUILD_TESTS "Build HELIX test executables" ON)
+
+if(HELIX_BUILD_PYTHON)
+    find_package(Python3 REQUIRED COMPONENTS Interpreter Development.Module)
+
+    if(NOT pybind11_DIR)
+        execute_process(
+            COMMAND "${Python3_EXECUTABLE}" -m pybind11 --cmakedir
+            RESULT_VARIABLE HELIX_PYBIND11_CMAKEDIR_RESULT
+            OUTPUT_VARIABLE HELIX_PYBIND11_CMAKEDIR
+            ERROR_QUIET
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+        )
+
+        if(HELIX_PYBIND11_CMAKEDIR_RESULT EQUAL 0
+            AND EXISTS "${HELIX_PYBIND11_CMAKEDIR}/pybind11Config.cmake")
+            set(pybind11_DIR "${HELIX_PYBIND11_CMAKEDIR}" CACHE PATH "pybind11 CMake package directory")
+        endif()
+    endif()
+
+    find_package(pybind11 CONFIG QUIET)
+    if(NOT pybind11_FOUND)
+        message(FATAL_ERROR
+            "HELIX_BUILD_PYTHON=ON requires pybind11 in the selected Python environment. "
+            "Install project Python dependencies in a virtual environment, for example "
+            "`uv venv --python 3.13 .venv && uv pip install -e \".[dev]\"`. Reconfigure with "
+            "-DPython3_EXECUTABLE=<venv>/bin/python, or pass "
+            "-Dpybind11_DIR=$(python -m pybind11 --cmakedir).")
+    endif()
+
+    pybind11_add_module(helix_python MODULE
+        bindings/python/helix_bindings.cpp
+    )
+
+    target_link_libraries(helix_python PRIVATE
+        helix_core
+        CUDA::cublas
+        CUDA::cusparse
+    )
+
+    set_target_properties(helix_python PROPERTIES
+        OUTPUT_NAME helix
+    )
+endif()
 
 if(HELIX_BUILD_TESTS)
     enable_testing()
@@ -476,13 +521,34 @@ if(HELIX_BUILD_TESTS)
         TIMEOUT 300
     )
 
-    helix_add_v01_expected_fail_gate(
-        NAME v01_python_smoke_gate
-        TASK T7
+    if(HELIX_BUILD_PYTHON)
+        helix_add_test(
+            NAME v01_python_smoke_gate
+            COMMAND
+                ${CMAKE_COMMAND}
+                -DHELIX_PYTHON_EXECUTABLE=${Python3_EXECUTABLE}
+                -DHELIX_PYTHON_MODULE_DIR=$<TARGET_FILE_DIR:helix_python>
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/python_binding_smoke.cmake
+            LABELS integration
+            GPU
+            TIMEOUT 300
+        )
+    endif()
+
+    add_executable(v01_cpp_library_example
+        examples/cpp/legacy_spin_glass.cpp
+    )
+
+    target_link_libraries(v01_cpp_library_example PRIVATE
+        helix_core
+    )
+
+    helix_add_test(
+        NAME v01_cpp_library_example_gate
+        TARGET v01_cpp_library_example
         LABELS integration
         GPU
-        REASON "import experimental Python binding and check solver result shape"
-        TIMEOUT 30
+        TIMEOUT 180
     )
 
     add_executable(initialize_detail_tests

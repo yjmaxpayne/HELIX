@@ -30,6 +30,20 @@ Use the repository verification wrapper from the repository root:
 
    HELIX_STEPS=2 scripts/verify_examples.sh
 
+Run the C++ library example
+---------------------------
+
+The public C++ example uses only ``<helix/helix.h>`` and calls the current
+legacy spin-glass compatibility adapter through the library API:
+
+.. code-block:: bash
+
+   ctest --test-dir build/cmake -R v01_cpp_library_example_gate --output-on-failure
+
+The source is ``examples/cpp/legacy_spin_glass.cpp``. It returns a structured
+``RunResult`` and does not write ``outputEnergy.txt``, ``output.txt``,
+``output_rho*.txt``, or ``snapshot_rho*.dat``.
+
 Run the full baseline
 ---------------------
 

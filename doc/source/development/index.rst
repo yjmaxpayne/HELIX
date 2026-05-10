@@ -36,7 +36,7 @@ Project structure
    │   ├── matrix_storage.*    # Global device storage lifecycle
    │   └── cuda_types.h        # Scalar aliases and CUDA wrappers
    ├── tests/                  # Unit, CUDA, numerical, integration tests
-   ├── examples/               # Checked-in reference output
+   ├── examples/               # Checked-in reference output and C++ smoke example
    ├── scripts/                # Verification and release helpers
    └── doc/                    # Sphinx documentation
 

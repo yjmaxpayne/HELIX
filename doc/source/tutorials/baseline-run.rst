@@ -33,3 +33,6 @@ This runs HELIX in the same shape used by the smoke verification workflow.
 
 For numerical changes, replace ``HELIX_STEPS=2`` with ``HELIX_STEPS=1000`` and
 compare against the checked-in energy trace prefix.
+
+This tutorial exercises the ``helix`` executable compatibility path. Library
+examples return ``RunResult`` and do not generate these legacy files.

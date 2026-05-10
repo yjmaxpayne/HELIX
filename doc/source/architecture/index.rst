@@ -8,7 +8,7 @@ CUDA state, not a clean library design yet.
 Build targets
 -------------
 
-The CMake target graph has three production targets:
+The default CMake target graph has three production targets:
 
 .. code-block:: text
 
@@ -40,6 +40,9 @@ by unit tests without linking cuBLAS or cuSPARSE. ``helix_core`` owns the
 installable C++ library target and the public ``HELIX::helix`` alias while still
 wrapping the legacy CUDA runtime internally. The executable owns CLI
 compatibility and legacy file output.
+
+When ``HELIX_BUILD_PYTHON=ON`` is configured, CMake also builds the optional
+``helix_python`` pybind11 module for the build-tree smoke path.
 
 Runtime flow
 ------------

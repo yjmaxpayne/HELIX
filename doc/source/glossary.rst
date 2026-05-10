@@ -19,7 +19,7 @@ Terms used throughout the HELIX documentation.
 
    Doxygen
       Documentation generator used to extract C++/CUDA declarations from
-      ``src/``.
+      ``include/helix`` and ``src/``.
 
    HEOM
       Hierarchical Equations of Motion. A method for open quantum system

@@ -47,6 +47,7 @@ Makefile
 # Documentation build outputs
 /doc/build/
 /doc/_doxygen/
+/doc/source/_generated/
 
 # Python local environments
 .venv/

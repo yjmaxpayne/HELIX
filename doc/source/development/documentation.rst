@@ -31,8 +31,9 @@ API documentation
   selected ``src/`` headers.
 * ``doc/Doxyfile.in`` is the tracked Doxygen template. The Sphinx build writes
   the concrete Doxyfile under ``doc/_doxygen/``.
-* Python API pages are placeholders for later bindings and will use autodoc,
-  autosummary, napoleon, doctest, and viewcode.
+* The current Python API page documents the optional pybind11 smoke surface.
+  Autodoc, autosummary, napoleon, doctest, and viewcode remain enabled for
+  future Python sources.
 * Keep implementation details in generated API pages and design rationale in
   architecture or core-concepts pages.
 

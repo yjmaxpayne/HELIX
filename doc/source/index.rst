@@ -26,13 +26,16 @@ HELIX documentation
 ===================
 
 **HELIX** is a C++17/CUDA modernization of a legacy GPU-accelerated
-Hierarchical Equations of Motion (HEOM) codebase. The supported user-facing
-artifact is the ``helix`` executable. The source tree is being refactored toward
-a reusable HEOM runtime and a later Python API.
+Hierarchical Equations of Motion (HEOM) codebase. The supported v0.1
+user-facing artifacts are the ``helix`` compatibility executable and the
+``HELIX::helix`` C++ library foundation target. The source tree is being
+refactored toward a reusable HEOM runtime while preserving the validated legacy
+CUDA baseline.
 
 The docs come from the source where possible. Doxygen and Breathe generate
 C++/CUDA API pages from ``include/`` and selected ``src/`` headers. Python
-autodoc, MyST, doctest, and viewcode are enabled for future bindings.
+autodoc, MyST, doctest, and viewcode are enabled for the experimental binding
+docs and future Python sources.
 
 What HELIX does
 ===============
@@ -43,10 +46,10 @@ verification, and runtime contracts explicit:
 * GPU HEOM propagation using CUDA, cuBLAS, and cuSPARSE.
 * Sparse default numerical path for the active CUDA 13 migration.
 * Reference baseline workflow based on ``examples/outputEnergy.txt``.
-* Layered CTest contract for unit, CUDA, numerical, integration, and
-  baseline checks.
-* Source references for moving global runtime state toward an explicit HEOM
-  context.
+* Layered CTest contract for unit, CUDA, numerical, integration, baseline,
+  sanitizer, and benchmark labels.
+* Public ``include/helix`` headers for the v0.1 C++ library foundation.
+* Experimental build-tree Python binding over the public C++ API.
 
 Documentation overview
 ----------------------
@@ -83,12 +86,6 @@ Documentation overview
 
 .. toctree::
    :maxdepth: 2
-   :caption: Release
-
-   release/index
-
-.. toctree::
-   :maxdepth: 2
    :caption: API reference
 
    api-reference/index
@@ -116,9 +113,10 @@ Main features
      - Compatibility wrappers for removed legacy cuSPARSE CSRMM entry points.
    * - CTest contract
      - Shared labels and GPU resource locking through ``helix_add_test()``.
-   * - Python API preparation
-     - Sphinx enables autodoc, autosummary, napoleon, doctest, MyST, and
-       viewcode.
+   * - C++ library foundation
+     - Public ``<helix/helix.h>`` API and exported ``HELIX::helix`` CMake target.
+   * - Experimental Python binding
+     - Optional pybind11 smoke path enabled with ``HELIX_BUILD_PYTHON=ON``.
 
 Example usage
 -------------
@@ -141,6 +139,8 @@ For the repository verification wrapper:
 Current status
 --------------
 
-The executable is still the regression harness. The ``include/helix`` headers
-expose the v0.1 C++ library starting point. Selected ``src`` headers document
-the legacy CUDA runtime that the executable still uses.
+The executable is still the regression harness and owns legacy generated files.
+The ``include/helix`` headers expose the v0.1 C++ library starting point; core
+library calls return ``RunResult`` and do not write legacy output files.
+Selected ``src`` headers document the legacy CUDA runtime that both paths still
+use internally.

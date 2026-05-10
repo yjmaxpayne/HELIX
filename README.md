@@ -9,19 +9,19 @@
   <img src="https://img.shields.io/badge/CUDA-13.0%2B-76B900.svg?logo=nvidia&logoColor=white" alt="CUDA 13.0+">
   <img src="https://img.shields.io/badge/CMake-3.24%2B-064F8C.svg?logo=cmake&logoColor=white" alt="CMake 3.24+">
   <img src="https://img.shields.io/badge/License-MIT-orange.svg" alt="License: MIT">
-  <img src="https://img.shields.io/badge/Status-Modernizing-yellow.svg" alt="Project Status">
+  <img src="https://img.shields.io/badge/Status-Experimental-yellow.svg" alt="Project Status">
   <img src="https://img.shields.io/badge/HEOM-GPU--Accelerated-6A5ACD.svg" alt="GPU-accelerated HEOM">
   <img src="https://img.shields.io/badge/NVIDIA-GPU%20Required-76B900.svg?logo=nvidia&logoColor=white" alt="NVIDIA GPU required">
   <img src="https://img.shields.io/badge/cuBLAS%20%2F%20cuSPARSE-Required-76B900.svg?logo=nvidia&logoColor=white" alt="cuBLAS/cuSPARSE required">
 </p>
 
-HELIX (HEOM Library for Integrated eXecution) is a modernization effort built around a legacy GPU-accelerated HEOM CUDA implementation. The project keeps the original executable buildable and numerically verifiable while the codebase is gradually shaped into a portable HEOM library for larger-scale simulations of non-Markovian open quantum systems.
+HELIX (HEOM Library for Integrated eXecution) is a C++17/CUDA implementation of the hierarchical equations of motion (HEOM) for GPU-accelerated simulations of non-Markovian open quantum systems. The repository contains the validated legacy CUDA executable path and a public C++ API that wraps the same solver path.
 
-CMake is the supported build system. The executable remains the compatibility and regression harness while library-facing APIs, model configuration, backend boundaries, and structured results are introduced incrementally.
+CMake is the supported build system. The executable is still available for compatibility and regression checks. Library calls return structured results instead of writing the legacy output files.
 
-## Project direction
+## Current scope
 
-The short-term goal is to preserve the validated CUDA numerical path and baseline outputs while making the implementation easier to test, link, and evolve. The longer-term direction is to provide a portable HEOM solver library with clearer separation between public API, model and bath construction, numerical core, CUDA backend strategy, and diagnostics.
+The current public API exposes the validated legacy spin-glass CUDA path. Model and bath construction, backend selection, and diagnostics are visible through public types, but runtime execution is still constrained to the compiled legacy configuration described below.
 
 ## Requirements
 
@@ -44,6 +44,114 @@ cmake --build build/cmake --parallel "$(nproc)"
 ```
 
 The executable is `build/cmake/helix`.
+
+## C++ API
+
+The C++ library target is `helix_core`, exported to consumers as `HELIX::helix`.
+Use the public aggregate header only:
+
+```cpp
+#include <helix/helix.h>
+
+#include <iostream>
+
+int main()
+{
+    auto system = helix::examples::legacy_spin_glass_system();
+    auto bath = helix::Bath::drude_lorentz_pade();
+    auto hierarchy = helix::HierarchySpec::compiled_default(bath);
+
+    helix::SolverOptions options;
+    options.steps = 2;
+
+    auto result = helix::HEOMSolver().run(system, hierarchy, options);
+    if(!result.ok())
+    {
+        std::cerr << result.diagnostics.summary() << "\n";
+        return 1;
+    }
+
+    std::cout << "rho shape: " << result.reduced_density_shape.rows << "x"
+              << result.reduced_density_shape.cols << "\n";
+    return 0;
+}
+```
+
+The repository example is `examples/cpp/legacy_spin_glass.cpp`. CTest builds and
+runs it as `v01_cpp_library_example_gate`.
+
+Build-tree and install-tree consumers use the same imported target. In a
+separate consumer project, the CMake entry point is:
+
+```cmake
+cmake_minimum_required(VERSION 3.24)
+project(HELIXConsumer LANGUAGES CXX CUDA)
+
+find_package(HELIX CONFIG REQUIRED)
+
+add_executable(consumer main.cpp)
+target_link_libraries(consumer PRIVATE HELIX::helix)
+```
+
+For an install-tree smoke, assuming that consumer project lives in `consumer/`:
+
+```bash
+cmake --install build/cmake --prefix build/install
+cmake -S consumer -B build/consumer \
+  -DCMAKE_PREFIX_PATH="$PWD/build/install" \
+  -DCMAKE_CUDA_ARCHITECTURES=89
+cmake --build build/consumer
+```
+
+The repository gate for this contract is:
+
+```bash
+ctest --test-dir build/cmake -R v01_external_consumer_cmake_gate --output-on-failure
+```
+
+Core library runs return `RunResult` and do not write `outputEnergy.txt`,
+`output.txt`, `output_rho*.txt`, or `snapshot_rho*.dat`. Those generated files
+belong to the `helix` executable compatibility path.
+
+## Experimental Python binding
+
+The Python binding is an experimental thin wrapper over the public C++ API. It is disabled by
+default, does not change solver semantics, and is a build-tree smoke path only.
+There is no wheel, conda package, or packaging compatibility promise.
+`HELIX_BUILD_PYTHON=ON` requires `pybind11` in the selected Python environment.
+
+One tested local setup uses a Python 3.13 virtual environment managed by `uv`:
+
+```bash
+uv venv --python 3.13 .venv
+uv pip install -e ".[dev]"
+cmake -S . -B build/cmake-python-313 \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DHELIX_BUILD_PYTHON=ON \
+  -DPython3_EXECUTABLE="$PWD/.venv/bin/python"
+cmake --build build/cmake-python-313 --parallel "$(nproc)"
+ctest --test-dir build/cmake-python-313 -R v01_python_smoke_gate --output-on-failure
+```
+
+The smoke mirrors the C++ example:
+
+```python
+import helix
+
+system = helix.examples.legacy_spin_glass_system()
+bath = helix.Bath.drude_lorentz_pade()
+hierarchy = helix.HierarchySpec.compiled_default(bath)
+options = helix.SolverOptions()
+options.steps = 2
+
+result = helix.HEOMSolver().run(system, hierarchy, options)
+assert result.ok(), result.diagnostics.summary()
+print(result.times, result.reduced_density_shape.rows, result.reduced_density_shape.cols)
+```
+
+Use a fresh build directory, or clear the CMake cache, when switching the configured
+`Python3_EXECUTABLE`; stale CMake cache entries can mix a Python 3.13 interpreter with headers from a
+different Python installation.
 
 ## CLI compatibility
 
@@ -72,8 +180,27 @@ Generated files include:
 
 - The default numerical path uses sparse host cuBLAS/cuSPARSE. The old `DYNAMIC_DENSE` path depends on device-side cuBLAS patterns from older CUDA releases and is disabled.
 - The public C++ adapter `helix::examples::legacy_spin_glass_system()` is a compatibility example for the current hard-coded spin-glass model, not a generic `System` schema. Arbitrary sparse systems return unsupported execution diagnostics rather than silently running the hard-coded model.
-- `helix::Bath::drude_lorentz_pade()` and `helix::HierarchySpec::compiled_default()` map the current compiled Drude-Lorentz/Pade and hierarchy defaults. v0.1 reports non-default bath or hierarchy fields as constrained.
+- `helix::Bath::drude_lorentz_pade()` and `helix::HierarchySpec::compiled_default()` map the current compiled Drude-Lorentz/Pade and hierarchy defaults. Non-default bath or hierarchy fields are reported as constrained.
 - CUDA 13 removed legacy `cusparseCcsrmm/csrmm2`; this tree uses a compatibility wrapper around `cusparseSpMM`.
+
+## Support matrix
+
+| Surface | Status | Notes |
+| --- | --- | --- |
+| `HELIX::helix` CMake target | supported | Build-tree and install-tree consumers are covered by CTest. |
+| `<helix/helix.h>` public header | supported | Public headers avoid private legacy CUDA/Thrust/cuBLAS/cuSPARSE types. |
+| Legacy spin-glass C++ example | supported compatibility path | Uses `helix::examples::legacy_spin_glass_system()` and default compiled bath/hierarchy settings. |
+| Arbitrary sparse schema validation | validation only | `System::from_sparse()` validates CSR shape, but production execution is not wired to arbitrary sparse systems. |
+| Core solver file output | intentionally unsupported | Library calls return `RunResult`; only the CLI writes legacy output files. |
+| `helix` executable | supported compatibility path | Preserves step env vars, version flags, and legacy generated files. |
+| Python binding | experimental | Build-tree pybind11 smoke only, disabled by default. |
+
+Known limits:
+
+- Only `Backend::LegacyCudaSparse` and `Precision::Single` are accepted by the current runtime.
+- Concurrent contexts are rejected; the supported lifecycle is sequential create/run/destroy/recreate.
+- `ResultMode::FinalState` is the supported result mode. Observable traces and full trajectories are not exposed by the current API.
+- The public spin-glass adapter is a compatibility bridge for the current compiled model, not a general model builder.
 
 ## Credit
 
