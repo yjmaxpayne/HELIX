@@ -31,6 +31,16 @@ enum class ResultMode {
 	Trajectory
 };
 
+enum class MatrixStorageOrder {
+	RowMajor
+};
+
+enum class RunStatus {
+	NotStarted,
+	Success,
+	Failed
+};
+
 enum class StatusCode {
 	InvalidDimension,
 	InvalidRowOffsets,
@@ -54,6 +64,16 @@ struct Diagnostic {
 
 class Diagnostics {
 public:
+	Backend backend = Backend::LegacyCudaSparse;
+	Precision precision = Precision::Single;
+	std::size_t hilbertSize = 0;
+	std::size_t hierarchySize = 0;
+	std::size_t steps = 0;
+	double timeStep = 0.0;
+	int integrationOrder = 0;
+	RunStatus status = RunStatus::NotStarted;
+	std::vector<std::string> warnings;
+
 	void add(StatusCode code, std::string message);
 	bool ok() const noexcept;
 	bool hasError(StatusCode code) const noexcept;
@@ -119,9 +139,17 @@ struct System {
 	static System from_sparse(SparseOperator hamiltonian, std::vector<SparseOperator> couplings = {});
 };
 
+struct ReducedDensityShape {
+	std::size_t count = 0;
+	std::size_t rows = 0;
+	std::size_t cols = 0;
+	MatrixStorageOrder storageOrder = MatrixStorageOrder::RowMajor;
+};
+
 struct RunResult {
 	std::vector<double> times;
-	std::vector<std::complex<double>> reducedDensity;
+	std::vector<std::complex<double>> reduced_density;
+	ReducedDensityShape reduced_density_shape;
 	Diagnostics diagnostics;
 
 	bool ok() const noexcept;

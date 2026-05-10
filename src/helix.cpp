@@ -2,6 +2,7 @@
 #include <helix/version.h>
 
 #include "library/legacy_runtime_session.h"
+#include "library/result_extractor.h"
 #include "parameters.h"
 
 #include <algorithm>
@@ -22,6 +23,7 @@ const char* runtimeVersion() noexcept
 void Diagnostics::add(StatusCode code, std::string message)
 {
 	entries_.push_back({code, std::move(message)});
+	status = RunStatus::Failed;
 }
 
 bool Diagnostics::ok() const noexcept
@@ -347,6 +349,27 @@ Diagnostics validateLegacyAdapterProblem(
 	return diagnostics;
 }
 
+Precision runtimePrecision() noexcept
+{
+#ifdef SINGLE
+	return Precision::Single;
+#else
+	return Precision::Double;
+#endif
+}
+
+void populateSuccessfulRunDiagnostics(Diagnostics& diagnostics, std::size_t steps)
+{
+	diagnostics.backend = Backend::LegacyCudaSparse;
+	diagnostics.precision = runtimePrecision();
+	diagnostics.hilbertSize = static_cast<std::size_t>(Param::N);
+	diagnostics.hierarchySize = library::ResultExtractor::hierarchy_size();
+	diagnostics.steps = steps;
+	diagnostics.timeStep = Param::Step;
+	diagnostics.integrationOrder = Param::IntegrationNum;
+	diagnostics.status = RunStatus::Success;
+}
+
 } // namespace
 
 Bath Bath::drude_lorentz_pade()
@@ -630,9 +653,12 @@ RunResult HEOMSolver::run_steps(std::size_t steps)
 	try
 	{
 		context_->run_steps(steps);
-		result.reducedDensity = context_->reduced_density();
-		const double stepSize = solverOptions_.timeStep > 0.0 ? solverOptions_.timeStep : Param::Step;
+		auto extraction = library::ResultExtractor::final_reduced_density();
+		result.reduced_density = std::move(extraction.values);
+		result.reduced_density_shape = extraction.shape;
+		const double stepSize = Param::Step;
 		result.times.push_back(static_cast<double>(steps) * stepSize);
+		populateSuccessfulRunDiagnostics(result.diagnostics, steps);
 	}
 	catch(const std::exception& error)
 	{

@@ -1,14 +1,13 @@
 #include "library/legacy_runtime_session.h"
 
 #include "initialize.h"
+#include "library/result_extractor.h"
 #include "liouville.h"
 #include "matrix_storage.h"
 #include "parameters.h"
 
 #include <cuda_runtime.h>
 #include <stdexcept>
-#include <thrust/copy.h>
-#include <thrust/host_vector.h>
 
 namespace helix::library {
 
@@ -90,21 +89,7 @@ void LegacyRuntimeSession::run_steps(std::size_t steps)
 std::vector<std::complex<double>> LegacyRuntimeSession::reduced_density() const
 {
 	requireActive();
-	if(dRho.size() < static_cast<std::size_t>(Param::N2))
-	{
-		throw std::logic_error("LegacyRuntimeSession reduced density is not initialized");
-	}
-
-	thrust::host_vector<Complex> hostDensity(Param::N2);
-	thrust::copy_n(dRho.begin(), Param::N2, hostDensity.begin());
-
-	std::vector<std::complex<double>> reducedDensity;
-	reducedDensity.reserve(hostDensity.size());
-	for(const auto& value : hostDensity)
-	{
-		reducedDensity.emplace_back(static_cast<double>(value.x), static_cast<double>(value.y));
-	}
-	return reducedDensity;
+	return ResultExtractor::final_reduced_density().values;
 }
 
 void LegacyRuntimeSession::destroy() noexcept

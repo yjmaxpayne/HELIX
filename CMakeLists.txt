@@ -45,6 +45,7 @@ set_target_properties(helix_host_core PROPERTIES
 add_library(helix_core STATIC
     src/helix.cpp
     src/library/legacy_runtime_session.cu
+    src/library/result_extractor.cu
     src/parameters.cu
     src/psd/eigenvalues.cu
     src/psd/psd.cu
@@ -392,13 +393,31 @@ if(HELIX_BUILD_TESTS)
         TIMEOUT 180
     )
 
-    helix_add_v01_expected_fail_gate(
+    add_executable(public_result_shape_tests
+        tests/numerical/public_result_shape_tests.cu
+    )
+
+    target_link_libraries(public_result_shape_tests PRIVATE
+        helix_core
+        helix_test_support
+    )
+
+    target_include_directories(public_result_shape_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+
+    set_target_properties(public_result_shape_tests PROPERTIES
+        CUDA_ARCHITECTURES "${HELIX_CUDA_ARCHITECTURES}"
+        CUDA_SEPARABLE_COMPILATION ON
+        CUDA_RESOLVE_DEVICE_SYMBOLS ON
+    )
+
+    helix_add_test(
         NAME v01_result_shape_no_file_output_gate
-        TASK T5
+        TARGET public_result_shape_tests
         LABELS numerical integration
         GPU
-        REASON "verify RunResult shape and core library no-file-output contract"
-        TIMEOUT 30
+        TIMEOUT 180
     )
 
     helix_add_v01_expected_fail_gate(

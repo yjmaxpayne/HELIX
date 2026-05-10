@@ -139,11 +139,11 @@ void test_public_solver_runs_legacy_spin_glass_adapter(helix::test::Reporter& te
 	auto result = solver.run_steps(2);
 
 	test.expect(result.ok(), "public HEOMSolver spin-glass smoke run returns clean diagnostics");
-	test.expect(result.reducedDensity.size() == static_cast<std::size_t>(Param::N2),
+	test.expect(result.reduced_density.size() == static_cast<std::size_t>(Param::N2),
 		"public HEOMSolver spin-glass smoke exposes the reduced density block");
-	test.expect(allFinite(result.reducedDensity), "public HEOMSolver spin-glass reduced density is finite");
+	test.expect(allFinite(result.reduced_density), "public HEOMSolver spin-glass reduced density is finite");
 
-	const DiffStats traceDiff = vectorDiff({traceBlock(result.reducedDensity)}, {{1.0, 0.0}});
+	const DiffStats traceDiff = vectorDiff({traceBlock(result.reduced_density)}, {{1.0, 0.0}});
 	printDiffStats("public_solver_spin_glass_trace",
 		traceDiff,
 		"unit trace after public HEOMSolver two-step legacy adapter run");

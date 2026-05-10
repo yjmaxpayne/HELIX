@@ -8,6 +8,7 @@ struct Diagnostic;
 class Context;
 class Diagnostics;
 struct HierarchySpec;
+struct ReducedDensityShape;
 struct RunResult;
 struct SolverOptions;
 struct SparseOperator;

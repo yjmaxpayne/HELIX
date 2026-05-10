@@ -14,7 +14,7 @@ Register tests with `helix_add_test()` in `CMakeLists.txt`. GPU tests must use t
 
 ## V0.1 Library Foundation Gate Map
 
-The v0.1 library foundation plan started with explicit expected-fail gates. T1, T2, T3, and T4 have replaced their placeholders with real tests; remaining placeholders are registered through `helix_add_test(... EXPECTED_FAIL ...)`, use only the label contract above, and are backed by `tests/planned/expected_fail_gate.cmake`. Each downstream task must replace its placeholder with the real test and remove `EXPECTED_FAIL` when that contract is implemented.
+The v0.1 library foundation plan started with explicit expected-fail gates. T1 through T5 have replaced their placeholders with real tests; remaining placeholders are registered through `helix_add_test(... EXPECTED_FAIL ...)`, use only the label contract above, and are backed by `tests/planned/expected_fail_gate.cmake`. Each downstream task must replace its placeholder with the real test and remove `EXPECTED_FAIL` when that contract is implemented.
 
 | Gate | Labels | GPU lock | Initial state | Turns green in | Contract |
 | --- | --- | --- | --- | --- | --- |
@@ -23,7 +23,7 @@ The v0.1 library foundation plan started with explicit expected-fail gates. T1, 
 | `v01_api_schema_validation_gate` | `unit` | no | real test | T2 | CSR schema validation and unsupported execution diagnostics are covered by unit tests. |
 | `v01_public_lifecycle_numerical_gate` | `numerical`, auto `cuda` | yes | real test | T3 | Public create/run/destroy/recreate lifecycle is repeatable within numerical tolerance. |
 | `v01_public_solver_spin_glass_gate` | `numerical`, auto `cuda` | yes | real test | T4 | Public `HEOMSolver` runs the legacy spin-glass compatibility adapter for a short GPU smoke and rejects arbitrary sparse execution. |
-| `v01_result_shape_no_file_output_gate` | `numerical`, `integration`, auto `cuda` | yes | expected-fail | T5 | `RunResult` shape, diagnostics, and no-file-output library behavior are verified. |
+| `v01_result_shape_no_file_output_gate` | `numerical`, `integration`, auto `cuda` | yes | real test | T5 | `RunResult` shape, diagnostics, and no-file-output library behavior are verified against the legacy CLI output contract. |
 | `v01_python_smoke_gate` | `integration`, auto `cuda` | yes | expected-fail | T7 | Optional Python binding imports, runs the smoke path, and reports result shape. |
 
 Existing gates remain part of the v0.1 plan: `helix_smoke_integration` and `HELIX_STEPS=2 scripts/verify_examples.sh` cover T6 CLI compatibility, while the final T8 signoff re-runs the full label matrix plus `HELIX_STEPS=1980 scripts/verify_examples.sh`.
