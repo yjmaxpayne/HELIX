@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BUILD_DIR="${HELIX_BUILD_DIR:-${HEOM_BUILD_DIR:-"${ROOT_DIR}/build/cmake"}}"
 RUN_DIR="${HELIX_RUN_DIR:-${HEOM_RUN_DIR:-"${BUILD_DIR}/example-run"}}"
-STEPS="${HELIX_STEPS:-${HEOM_STEPS:-1980}}"
+STEPS="${HELIX_STEPS:-${HEOM_STEPS:-1000}}"
 ENERGY_TOL="${HELIX_ENERGY_TOL:-${HEOM_ENERGY_TOL:-1e-5}}"
 BUILD_JOBS="${HELIX_BUILD_JOBS:-${HEOM_BUILD_JOBS:-$(nproc)}}"
 

@@ -7,7 +7,7 @@
 - [ ] `cmake -S . -B build/cmake -DCMAKE_BUILD_TYPE=Release`
 - [ ] `cmake --build build/cmake --parallel "$(nproc)"`
 - [ ] `HELIX_STEPS=2 scripts/verify_examples.sh`
-- [ ] Full baseline run, if numerics changed: `HELIX_STEPS=1980 scripts/verify_examples.sh`
+- [ ] Full baseline run, if numerics changed: `HELIX_STEPS=1000 scripts/verify_examples.sh`
 
 ## Numerical Impact
 

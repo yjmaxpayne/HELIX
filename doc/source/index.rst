@@ -21,52 +21,54 @@
 .. image:: https://img.shields.io/badge/HEOM-GPU--Accelerated-6A5ACD.svg
    :alt: GPU-accelerated HEOM
 
-==============================
-Welcome to HELIX Documentation
-==============================
+===================
+HELIX documentation
+===================
 
 **HELIX** is a C++17/CUDA modernization of a legacy GPU-accelerated
-Hierarchical Equations of Motion (HEOM) codebase. The current supported product
-is the ``helix`` executable; the source tree is being refactored toward a
-reusable HEOM runtime and future Python-facing API.
+Hierarchical Equations of Motion (HEOM) codebase. The supported v0.1
+user-facing artifacts are the ``helix`` compatibility executable and the
+``HELIX::helix`` C++ library foundation target. The source tree is being
+refactored toward a reusable HEOM runtime while preserving the validated legacy
+CUDA baseline.
 
-The documentation is source-driven. C++/CUDA API pages are generated from
-``src/`` with Doxygen and Breathe. Python autodoc, MyST, doctest, and viewcode
-are already enabled so future Python bindings can be documented without
-rebuilding the documentation stack.
+The docs come from the source where possible. Doxygen and Breathe generate
+C++/CUDA API pages from ``include/`` and selected ``src/`` headers. Python
+autodoc, MyST, doctest, and viewcode are enabled for the experimental binding
+docs and future Python sources.
 
-What is HELIX?
-==============
+What HELIX does
+===============
 
 HELIX preserves a CUDA HEOM implementation while making its build, test,
 verification, and runtime contracts explicit:
 
-* **GPU HEOM propagation** using CUDA, cuBLAS, and cuSPARSE.
-* **Sparse default numerical path** for the active CUDA 13 migration.
-* **Reference baseline workflow** based on ``examples/outputEnergy.txt``.
-* **Layered CTest contract** for unit, CUDA, numerical, integration, and
-  baseline checks.
-* **Refactoring-ready source reference** for moving from global runtime state
-  toward an explicit HEOM context.
+* GPU HEOM propagation using CUDA, cuBLAS, and cuSPARSE.
+* Sparse default numerical path for the active CUDA 13 migration.
+* Reference baseline workflow based on ``examples/outputEnergy.txt``.
+* Layered CTest contract for unit, CUDA, numerical, integration, baseline,
+  sanitizer, and benchmark labels.
+* Public ``include/helix`` headers for the v0.1 C++ library foundation.
+* Experimental build-tree Python binding over the public C++ API.
 
-Documentation Overview
+Documentation overview
 ----------------------
 
 .. toctree::
    :maxdepth: 2
-   :caption: Getting Started
+   :caption: Getting started
 
    getting-started/index
 
 .. toctree::
    :maxdepth: 2
-   :caption: Core Concepts
+   :caption: Core concepts
 
    core-concepts/index
 
 .. toctree::
    :maxdepth: 2
-   :caption: Architecture Guide
+   :caption: Architecture
 
    architecture/index
 
@@ -84,13 +86,7 @@ Documentation Overview
 
 .. toctree::
    :maxdepth: 2
-   :caption: Release
-
-   release/index
-
-.. toctree::
-   :maxdepth: 2
-   :caption: API Reference
+   :caption: API reference
 
    api-reference/index
 
@@ -100,8 +96,8 @@ Documentation Overview
 
    glossary
 
-Key Features
-------------
+Main features
+-------------
 
 .. list-table::
    :widths: 30 70
@@ -109,19 +105,20 @@ Key Features
 
    * - Feature
      - Description
-   * - **CUDA Runtime**
+   * - CUDA runtime
      - C++17/CUDA executable with cuBLAS and cuSPARSE execution paths.
-   * - **HEOM Baseline**
-     - Checked-in energy trace for ``HELIX_STEPS=1980`` plus smoke validation.
-   * - **CUDA 13 Compatibility**
+   * - HEOM baseline
+     - Checked-in energy trace for ``HELIX_STEPS=1980`` plus 1000-step prefix validation.
+   * - CUDA 13 compatibility
      - Compatibility wrappers for removed legacy cuSPARSE CSRMM entry points.
-   * - **CTest Contract**
+   * - CTest contract
      - Shared labels and GPU resource locking through ``helix_add_test()``.
-   * - **Future Python API**
-     - Sphinx configuration already enables autodoc, autosummary, napoleon,
-       doctest, MyST, and viewcode.
+   * - C++ library foundation
+     - Public ``<helix/helix.h>`` API and exported ``HELIX::helix`` CMake target.
+   * - Experimental Python binding
+     - Optional pybind11 smoke path enabled with ``HELIX_BUILD_PYTHON=ON``.
 
-Example Usage
+Example usage
 -------------
 
 .. code-block:: bash
@@ -139,10 +136,11 @@ For the repository verification wrapper:
 
    HELIX_STEPS=2 scripts/verify_examples.sh
 
-Current Status
+Current status
 --------------
 
-The executable is the authoritative regression harness. The C++/CUDA headers
-are documented as source-level implementation references, not as a stable
-installed library ABI. The next API milestone is an explicit lifecycle context
-that can support both C++ and Python-facing entry points.
+The executable is still the regression harness and owns legacy generated files.
+The ``include/helix`` headers expose the v0.1 C++ library starting point; core
+library calls return ``RunResult`` and do not write legacy output files.
+Selected ``src`` headers document the legacy CUDA runtime that both paths still
+use internally.

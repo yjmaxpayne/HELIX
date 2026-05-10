@@ -13,6 +13,7 @@ PROJECT_ROOT = ROOT.parent
 DOXYGEN_XML = PROJECT_ROOT / "doc" / "_doxygen" / "xml"
 DOXYGEN_CONFIG = PROJECT_ROOT / "doc" / "_doxygen" / "Doxyfile.generated"
 DOXYGEN_TEMPLATE = PROJECT_ROOT / "doc" / "Doxyfile.in"
+DOXYGEN_API_INCLUDE = ROOT / "source" / "_generated" / "doxygen-api.inc"
 SKIP_DOXYGEN = os.environ.get("HELIX_DOCS_SKIP_DOXYGEN") == "1"
 
 sys.path.insert(0, str(PROJECT_ROOT / "python"))
@@ -143,8 +144,89 @@ def write_empty_doxygen_index() -> None:
     )
 
 
+def write_doxygen_api_include() -> None:
+    """Write the RST include that owns Doxygen/Breathe directives."""
+
+    DOXYGEN_API_INCLUDE.parent.mkdir(parents=True, exist_ok=True)
+    if SKIP_DOXYGEN:
+        DOXYGEN_API_INCLUDE.write_text(
+            """.. note::
+
+   Doxygen generation was skipped for this build. Unset
+   ``HELIX_DOCS_SKIP_DOXYGEN`` and install Doxygen to render the generated
+   C++/CUDA symbol index.
+""",
+            encoding="utf-8",
+        )
+        return
+
+    DOXYGEN_API_INCLUDE.write_text(
+        """Public C++ API
+--------------
+
+.. doxygennamespace:: helix
+   :project: HELIX
+   :members:
+
+Parameters
+----------
+
+.. doxygenfile:: parameters.h
+   :project: HELIX
+
+Compile-time profile
+--------------------
+
+.. doxygenfile:: legacy_compile_options.h
+   :project: HELIX
+
+Scalar and CUDA compatibility types
+-----------------------------------
+
+.. doxygenfile:: cuda_types.h
+   :project: HELIX
+
+Initialization
+--------------
+
+.. doxygenfile:: initialize.h
+   :project: HELIX
+
+.. doxygennamespace:: initialize_detail
+   :project: HELIX
+   :members:
+
+Liouville propagation
+---------------------
+
+.. doxygenfile:: liouville.h
+   :project: HELIX
+
+Matrix storage and utilities
+----------------------------
+
+.. doxygenfile:: matrix_storage.h
+   :project: HELIX
+
+.. doxygenfile:: matrix_util.h
+   :project: HELIX
+
+Pade spectrum decomposition
+---------------------------
+
+.. doxygenfile:: psd.h
+   :project: HELIX
+
+.. doxygenfile:: eigenvalues.h
+   :project: HELIX
+""",
+        encoding="utf-8",
+    )
+
+
 def setup(app: object) -> None:
     app.add_css_file("css/style.css")
+    write_doxygen_api_include()
     if SKIP_DOXYGEN:
         write_empty_doxygen_index()
         app.tags.add("no_doxygen")

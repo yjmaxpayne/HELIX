@@ -7,7 +7,7 @@ coupling the reduced density matrix to a hierarchy of auxiliary density
 operators. HELIX keeps the original GPU-HEOM numerical workflow usable while
 making the implementation testable and portable.
 
-Default Profile
+Default profile
 ---------------
 
 The default build profile uses:
@@ -19,17 +19,17 @@ The default build profile uses:
 * single precision via ``SINGLE``
 * counter term via ``USE_COUNTER``
 
-Bath Expansion
+Bath expansion
 --------------
 
-``src/Psd/`` computes Pade spectrum decomposition poles and residues. These
+``src/psd/`` computes Pade spectrum decomposition poles and residues. These
 values feed ``setTemperatureDependence()``, which initializes bath frequencies
 and HEOM coefficients used by the Liouville propagation path.
 
-Implementation Status
+Implementation status
 ---------------------
 
-The numerical semantics are protected by reference tests and the executable
-baseline. The immediate modernization goal is not to change the HEOM equations;
-it is to expose lifecycle, configuration, and API boundaries around the current
-verified behavior.
+Reference tests and the executable baseline protect the numerical semantics.
+The immediate modernization goal is not to change the HEOM equations; it is to
+expose lifecycle, configuration, and API boundaries around the verified
+behavior.

@@ -1,9 +1,9 @@
 ===============
-Getting Started
+Getting started
 ===============
 
-This section covers the shortest path from a clean checkout to a verified HELIX
-run. HELIX currently targets source builds on Linux with an NVIDIA GPU.
+Use these pages to get from a clean checkout to a verified HELIX run. HELIX
+currently targets source builds on Linux with an NVIDIA GPU.
 
 .. toctree::
    :maxdepth: 2
@@ -13,8 +13,8 @@ run. HELIX currently targets source builds on Linux with an NVIDIA GPU.
    quickstart
    troubleshooting
 
-Key Requirements
-----------------
+Requirements
+------------
 
 * CMake 3.24 or newer
 * C++17 and CUDA C++17 language modes
@@ -22,7 +22,7 @@ Key Requirements
 * NVIDIA GPU with cuBLAS and cuSPARSE available
 * Python 3.11 or newer for documentation tooling
 
-Next Steps
+Next steps
 ----------
 
 1. Start with :doc:`installation` to configure the build environment.
@@ -30,9 +30,9 @@ Next Steps
 3. Use :doc:`troubleshooting` if CUDA architecture detection or generated
    output handling fails.
 
-See Also
+See also
 --------
 
 * :doc:`../development/index` for contributor commands
-* :doc:`../api-reference/index` for source-level API documentation
+* :doc:`../api-reference/index` for source API documentation
 * :doc:`../architecture/index` for runtime architecture

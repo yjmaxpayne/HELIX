@@ -2,7 +2,7 @@
 Troubleshooting
 ===============
 
-CUDA Architecture Detection Fails
+CUDA architecture detection fails
 ---------------------------------
 
 Pass the local architecture explicitly:
@@ -14,18 +14,18 @@ Pass the local architecture explicitly:
 
 Use the architecture that matches the target GPU.
 
-Generated Files Appear in the Source Tree
+Generated files appear in the source tree
 -----------------------------------------
 
 Run ``helix`` from a scratch directory. Generated files such as
 ``outputEnergy.txt`` and ``snapshot_rho<N>.dat`` are ignored by Git, except for
 intentional reference data under ``examples/``.
 
-Doxygen Is Missing During Documentation Build
+Doxygen is missing during documentation build
 ---------------------------------------------
 
-The C++/CUDA API reference requires Doxygen. This follows the same pattern used
-by CUDA-Q: Doxygen extracts C++ API XML and Breathe renders it in Sphinx.
+The C++/CUDA API reference requires Doxygen. HELIX uses the same pattern as
+CUDA-Q: Doxygen extracts C++ API XML and Breathe renders it in Sphinx.
 
 .. code-block:: bash
 
@@ -34,7 +34,7 @@ by CUDA-Q: Doxygen extracts C++ API XML and Breathe renders it in Sphinx.
 For non-API authoring checks only, set ``HELIX_DOCS_SKIP_DOXYGEN=1``. Full CI
 and release documentation builds should keep Doxygen enabled.
 
-CUDA Tests Need a GPU
+CUDA tests need a GPU
 ---------------------
 
 CTest entries that execute CUDA kernels are registered with ``GPU`` and reserve

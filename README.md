@@ -9,17 +9,23 @@
   <img src="https://img.shields.io/badge/CUDA-13.0%2B-76B900.svg?logo=nvidia&logoColor=white" alt="CUDA 13.0+">
   <img src="https://img.shields.io/badge/CMake-3.24%2B-064F8C.svg?logo=cmake&logoColor=white" alt="CMake 3.24+">
   <img src="https://img.shields.io/badge/License-MIT-orange.svg" alt="License: MIT">
-  <img src="https://img.shields.io/badge/Status-Modernizing-yellow.svg" alt="Project Status">
+  <img src="https://img.shields.io/badge/Status-Experimental-yellow.svg" alt="Project Status">
   <img src="https://img.shields.io/badge/HEOM-GPU--Accelerated-6A5ACD.svg" alt="GPU-accelerated HEOM">
   <img src="https://img.shields.io/badge/NVIDIA-GPU%20Required-76B900.svg?logo=nvidia&logoColor=white" alt="NVIDIA GPU required">
   <img src="https://img.shields.io/badge/cuBLAS%20%2F%20cuSPARSE-Required-76B900.svg?logo=nvidia&logoColor=white" alt="cuBLAS/cuSPARSE required">
 </p>
 
-HELIX (HEOM Library for Integrated eXecution) is a modernization of a legacy CUDA codebase for GPU-accelerated HEOM. The maintained build system is the CMake configuration in this tree.
+HELIX (HEOM Library for Integrated eXecution) is a C++17/CUDA implementation of the hierarchical equations of motion (HEOM) for GPU-accelerated simulations of non-Markovian open quantum systems. The repository contains the validated legacy CUDA executable path and a public C++ API that wraps the same solver path.
+
+CMake is the supported build system. The executable is still available for compatibility and regression checks. Library calls return structured results instead of writing the legacy output files.
+
+## Current scope
+
+The current public API exposes the validated legacy spin-glass CUDA path. Model and bath construction, backend selection, and diagnostics are visible through public types, but runtime execution is still constrained to the compiled legacy configuration described below.
 
 ## Requirements
 
-Verified environment:
+Tested environment:
 
 - Ubuntu 24.04, Linux 6.17
 - NVIDIA driver 580.105.08
@@ -28,7 +34,7 @@ Verified environment:
 - GCC 13.3.0
 - CMake 3.28.3
 
-The program requires a CUDA-capable NVIDIA GPU and links against cuBLAS and cuSPARSE from the CUDA toolkit. If CMake cannot detect the right GPU architecture, pass `-DHELIX_CUDA_ARCHITECTURES=<arch>`, for example `89`.
+`helix` requires a CUDA-capable NVIDIA GPU and links against cuBLAS and cuSPARSE from the CUDA toolkit. If CMake cannot detect the right GPU architecture, pass `-DHELIX_CUDA_ARCHITECTURES=<arch>`, for example `89`.
 
 ## Build
 
@@ -39,17 +45,129 @@ cmake --build build/cmake --parallel "$(nproc)"
 
 The executable is `build/cmake/helix`.
 
-## Run The Example Baseline
+## C++ API
 
-The main program writes outputs into the current working directory. Run from a separate directory to avoid mixing generated files with sources:
+The C++ library target is `helix_core`, exported to consumers as `HELIX::helix`.
+Use the public aggregate header only:
+
+```cpp
+#include <helix/helix.h>
+
+#include <iostream>
+
+int main()
+{
+    auto system = helix::examples::legacy_spin_glass_system();
+    auto bath = helix::Bath::drude_lorentz_pade();
+    auto hierarchy = helix::HierarchySpec::compiled_default(bath);
+
+    helix::SolverOptions options;
+    options.steps = 2;
+
+    auto result = helix::HEOMSolver().run(system, hierarchy, options);
+    if(!result.ok())
+    {
+        std::cerr << result.diagnostics.summary() << "\n";
+        return 1;
+    }
+
+    std::cout << "rho shape: " << result.reduced_density_shape.rows << "x"
+              << result.reduced_density_shape.cols << "\n";
+    return 0;
+}
+```
+
+The repository example is `examples/cpp/legacy_spin_glass.cpp`. CTest builds and
+runs it as `v01_cpp_library_example_gate`.
+
+Build-tree and install-tree consumers use the same imported target. In a
+separate consumer project, the CMake entry point is:
+
+```cmake
+cmake_minimum_required(VERSION 3.24)
+project(HELIXConsumer LANGUAGES CXX CUDA)
+
+find_package(HELIX CONFIG REQUIRED)
+
+add_executable(consumer main.cpp)
+target_link_libraries(consumer PRIVATE HELIX::helix)
+```
+
+For an install-tree smoke, assuming that consumer project lives in `consumer/`:
+
+```bash
+cmake --install build/cmake --prefix build/install
+cmake -S consumer -B build/consumer \
+  -DCMAKE_PREFIX_PATH="$PWD/build/install" \
+  -DCMAKE_CUDA_ARCHITECTURES=89
+cmake --build build/consumer
+```
+
+The repository gate for this contract is:
+
+```bash
+ctest --test-dir build/cmake -R v01_external_consumer_cmake_gate --output-on-failure
+```
+
+Core library runs return `RunResult` and do not write `outputEnergy.txt`,
+`output.txt`, `output_rho*.txt`, or `snapshot_rho*.dat`. Those generated files
+belong to the `helix` executable compatibility path.
+
+## Experimental Python binding
+
+The Python binding is an experimental thin wrapper over the public C++ API. It is disabled by
+default, does not change solver semantics, and is a build-tree smoke path only.
+There is no wheel, conda package, or packaging compatibility promise.
+`HELIX_BUILD_PYTHON=ON` requires `pybind11` in the selected Python environment.
+
+One tested local setup uses a Python 3.13 virtual environment managed by `uv`:
+
+```bash
+uv venv --python 3.13 .venv
+uv pip install -e ".[dev]"
+cmake -S . -B build/cmake-python-313 \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DHELIX_BUILD_PYTHON=ON \
+  -DPython3_EXECUTABLE="$PWD/.venv/bin/python"
+cmake --build build/cmake-python-313 --parallel "$(nproc)"
+ctest --test-dir build/cmake-python-313 -R v01_python_smoke_gate --output-on-failure
+```
+
+The smoke mirrors the C++ example:
+
+```python
+import helix
+
+system = helix.examples.legacy_spin_glass_system()
+bath = helix.Bath.drude_lorentz_pade()
+hierarchy = helix.HierarchySpec.compiled_default(bath)
+options = helix.SolverOptions()
+options.steps = 2
+
+result = helix.HEOMSolver().run(system, hierarchy, options)
+assert result.ok(), result.diagnostics.summary()
+print(result.times, result.reduced_density_shape.rows, result.reduced_density_shape.cols)
+```
+
+Use a fresh build directory, or clear the CMake cache, when switching the configured
+`Python3_EXECUTABLE`; stale CMake cache entries can mix a Python 3.13 interpreter with headers from a
+different Python installation.
+
+## CLI compatibility
+
+The `helix` executable is kept as a compatibility wrapper around the legacy GPU-HEOM run path. It supports `--version` and `-V`, reads `HELIX_STEPS` with `HEOM_STEPS` as a compatibility alias, and continues to write the legacy output files in the current working directory. Library runs return structured results instead of writing these files.
+
+## Run the example baseline
+
+`helix` writes output files in the current directory. Use a scratch directory so generated files do not land next to the sources:
 
 ```bash
 mkdir -p build/example-run
 cd build/example-run
-HELIX_STEPS=1980 ../cmake/helix
+HELIX_STEPS=1000 ../cmake/helix
 ```
 
-`HELIX_STEPS` is optional; if it is not set, the legacy default remains `1000000`. The legacy `HEOM_STEPS` variable is still accepted as a compatibility alias. The checked-in `examples/outputEnergy.txt` contains 1981 rows, corresponding to `1980` steps plus the final output row.
+`HELIX_STEPS` is optional. When it is unset, HELIX uses the legacy default of `1000000` steps. The legacy `HEOM_STEPS` variable is still accepted as a compatibility alias. The checked-in `examples/outputEnergy.txt` contains 1981 rows for `1980` steps plus the final output row; the default verification wrapper runs `1000` steps and compares the 1001-row prefix to keep the full baseline gate shorter.
 
 Generated files include:
 
@@ -58,102 +176,41 @@ Generated files include:
 - `output_rho<N>.txt`: diagonal density output chunks
 - `snapshot_rho<N>.dat`: binary snapshots
 
-## Verify
-
-Use the helper script to build, run, and compare `outputEnergy.txt` against the checked-in baseline with a default energy tolerance of `1e-5`:
-
-```bash
-scripts/verify_examples.sh
-```
-
-For a quick smoke test:
-
-```bash
-HELIX_STEPS=2 scripts/verify_examples.sh
-```
-
-CTest labels split fast correctness gates from longer or specialized checks:
-
-```bash
-ctest --test-dir build/cmake -L unit --output-on-failure
-ctest --test-dir build/cmake -L cuda --output-on-failure
-ctest --test-dir build/cmake -L numerical --output-on-failure
-ctest --test-dir build/cmake -L integration --output-on-failure
-ctest --test-dir build/cmake -L baseline --output-on-failure
-ctest --test-dir build/cmake -L sanitizer --output-on-failure
-```
-
-The `sanitizer` label runs `compute-sanitizer --tool memcheck` and writes reports under `build/cmake/sanitizer/` unless `HELIX_SANITIZER_REPORT_DIR` is set.
-
-Gate ownership is split by cost: `unit`, `cuda`, and `integration` run in the CUDA smoke pull-request workflow; `sanitizer` is a manual pre-merge workflow dispatch option; the full 1980-step baseline runs in the scheduled/manual numerical baseline workflow and in release packaging.
-
-Current full verification on the environment above, from the 2026-05-09 final baseline:
-
-- Command: `HELIX_STEPS=1980 scripts/verify_examples.sh`, running `build/cmake/helix` from `build/cmake/example-run`
-- Runtime: `real 113.14s`
-- Output rows: `1981`
-- `outputEnergy.txt` maximum absolute time difference versus `examples/outputEnergy.txt`: `0`
-- `outputEnergy.txt` maximum absolute energy difference versus `examples/outputEnergy.txt`: `5e-7`
-- `output.txt` differs from the historical file because it records performance timing, not a physics baseline
-
 ## Notes
 
-- The default numerical path is the sparse host cuBLAS/cuSPARSE path. The old `DYNAMIC_DENSE` path depends on device-side cuBLAS patterns from older CUDA releases and is not enabled.
+- The default numerical path uses sparse host cuBLAS/cuSPARSE. The old `DYNAMIC_DENSE` path depends on device-side cuBLAS patterns from older CUDA releases and is disabled.
+- The public C++ adapter `helix::examples::legacy_spin_glass_system()` is a compatibility example for the current hard-coded spin-glass model, not a generic `System` schema. Arbitrary sparse systems return unsupported execution diagnostics rather than silently running the hard-coded model.
+- `helix::Bath::drude_lorentz_pade()` and `helix::HierarchySpec::compiled_default()` map the current compiled Drude-Lorentz/Pade and hierarchy defaults. Non-default bath or hierarchy fields are reported as constrained.
 - CUDA 13 removed legacy `cusparseCcsrmm/csrmm2`; this tree uses a compatibility wrapper around `cusparseSpMM`.
 
-## Documentation
+## Support matrix
 
-Sphinx documentation lives in `doc/source`. API pages are generated from `src/`
-with Doxygen and Breathe. Python autodoc support is already enabled for future
-bindings:
+| Surface | Status | Notes |
+| --- | --- | --- |
+| `HELIX::helix` CMake target | supported | Build-tree and install-tree consumers are covered by CTest. |
+| `<helix/helix.h>` public header | supported | Public headers avoid private legacy CUDA/Thrust/cuBLAS/cuSPARSE types. |
+| Legacy spin-glass C++ example | supported compatibility path | Uses `helix::examples::legacy_spin_glass_system()` and default compiled bath/hierarchy settings. |
+| Arbitrary sparse schema validation | validation only | `System::from_sparse()` validates CSR shape, but production execution is not wired to arbitrary sparse systems. |
+| Core solver file output | intentionally unsupported | Library calls return `RunResult`; only the CLI writes legacy output files. |
+| `helix` executable | supported compatibility path | Preserves step env vars, version flags, and legacy generated files. |
+| Python binding | experimental | Build-tree pybind11 smoke only, disabled by default. |
 
-```bash
-python3 -m venv build/docs-venv
-build/docs-venv/bin/python -m pip install -e ".[docs]"
-SPHINXBUILD="$PWD/build/docs-venv/bin/sphinx-build" \
-  make -C doc html SPHINXOPTS="-W --keep-going"
-```
+Known limits:
 
-The HTML output is written to `doc/build/html`. Doxygen is required for local
-C++/CUDA API builds and in the documentation CI workflow. The tracked
-`doc/Doxyfile.in` template is materialized under `doc/_doxygen/` during builds.
-
-The `Documentation` GitHub Actions workflow builds docs for pull requests and
-publishes `doc/build/html` to GitHub Pages on pushes to `main`. The HELIX
-repository is configured to use **GitHub Actions** as the Pages publishing
-source; forks need the same Pages setting if they want automatic publication.
-After the first successful `main` deployment, the site is available at
-<https://yjmaxpayne.github.io/HELIX/>.
-
-## Release Management
-
-The first HELIX product version is `v0.0.1`. Product versions come from SemVer
-Git tags; CMake embeds the resolved version in the executable:
-
-```bash
-build/cmake/helix --version
-```
-
-For the initial release candidate, pass the tag explicitly so the binary,
-package manifest, and GitHub Release stay synchronized:
-
-```bash
-HELIX_RELEASE_VERSION=v0.0.1 HELIX_STEPS=1980 scripts/verify_examples.sh
-scripts/package_release.sh v0.0.1
-```
-
-Use Conventional Commit subjects and generate formal changelog entries with
-`cz changelog --incremental` from the optional `.[release]` tooling.
+- Only `Backend::LegacyCudaSparse` and `Precision::Single` are accepted by the current runtime.
+- Concurrent contexts are rejected; the supported lifecycle is sequential create/run/destroy/recreate.
+- `ResultMode::FinalState` is the supported result mode. Observable traces and full trajectories are not exposed by the current API.
+- The public spin-glass adapter is a compatibility bridge for the current compiled model, not a general model builder.
 
 ## Credit
 
-This repository keeps the original CUDA implementation usable while moving it toward a maintainable HEOM library.
+This repository keeps the original CUDA code usable while the project moves toward a maintainable, portable HEOM library.
 
-The original GPU-HEOM CUDA code is by Masashi Tsuchimoto and Yoshitaka Tanimura. The Kyoto University Theoretical Chemistry Group research activity page lists "GPU-HEOM (HEOM code for CUDA)" as work by M. Tsuchimoto and Y. Tanimura:
+Masashi Tsuchimoto and Yoshitaka Tanimura wrote the original GPU-HEOM CUDA code. The Kyoto University Theoretical Chemistry Group research activity page lists "GPU-HEOM (HEOM code for CUDA)" as work by M. Tsuchimoto and Y. Tanimura:
 
 - http://theochem.kuchem.kyoto-u.ac.jp/resarch/resarch_activity.htm
 
-HELIX modernization, Linux/CMake/CUDA 13 migration, verification workflow, documentation, ongoing library maintenance and further developments are by Ye Jun <yjmaxpayne@hotmail.com>.
+Ye Jun <yjmaxpayne@hotmail.com> maintains HELIX and handled the Linux/CMake/CUDA 13 migration, verification, and documentation work.
 
 ## Citation
 
@@ -184,6 +241,6 @@ doi = {10.1021/acs.jctc.5b00488}
 
 This repository is released under the MIT License. See `LICENSE`.
 
-## Supports
+## Support
 
-For questions, issues, or collaboration requests, please use GitHub Issues or contact Ye Jun at yjmaxpayne@hotmail.com.
+Use GitHub Issues or contact Ye Jun at yjmaxpayne@hotmail.com.

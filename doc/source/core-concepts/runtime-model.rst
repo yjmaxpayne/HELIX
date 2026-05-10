@@ -1,12 +1,12 @@
 =============
-Runtime Model
+Runtime model
 =============
 
-The current runtime is a legacy executable workflow with explicit global CUDA
-state. This model is stable enough for regression testing but not the final
-library API.
+The current runtime still uses legacy global CUDA state internally. v0.1 wraps
+that path with a sequential ``Context`` and ``HEOMSolver`` library surface while
+keeping the ``helix`` executable as the compatibility workflow.
 
-Execution Sequence
+Execution sequence
 ------------------
 
 .. code-block:: text
@@ -26,7 +26,7 @@ Execution Sequence
 
    final output and cleanup
 
-Cleanup Contract
+Cleanup contract
 ----------------
 
 Code that calls runtime functions in-process must release global resources:
@@ -38,9 +38,24 @@ Code that calls runtime functions in-process must release global resources:
    cublasDestroy(cublasHandle);
    cublasHandle = nullptr;
 
-Future Direction
+Library boundary
 ----------------
 
-The planned library boundary is an explicit HEOM context that owns parameters,
-device vectors, CUDA handles, sparse caches, and output policy. That boundary
-will be the natural anchor for a future Python API.
+The public v0.1 library boundary is:
+
+* ``Context`` for one-active-context lifecycle ownership.
+* ``HEOMSolver`` for the current legacy spin-glass compatibility run path.
+* ``RunResult`` for final reduced density shape, time, and diagnostics.
+* ``Diagnostics`` for unsupported runtime options and validation errors.
+
+Core library calls return structured results and do not write legacy output
+files. File output remains executable-only behavior.
+
+Known limits
+------------
+
+* Only sequential create/run/destroy/recreate is supported.
+* Only the legacy CUDA sparse backend and single precision runtime path are
+  accepted.
+* Arbitrary sparse system schema validation exists, but runtime execution is
+  limited to the legacy spin-glass compatibility adapter.

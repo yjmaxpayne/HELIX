@@ -2,34 +2,49 @@ Architecture
 ============
 
 HELIX keeps the legacy executable behavior intact while carving out tested
-boundaries for a future reusable HEOM runtime. The architecture is therefore a
-controlled modernization of global CUDA state, not a clean library design yet.
+boundaries for reusable runtime work. It is a controlled modernization of global
+CUDA state, not a clean library design yet.
 
-Build Targets
+Build targets
 -------------
 
-The CMake target graph has two production targets:
+The default CMake target graph has three production targets:
 
 .. code-block:: text
 
    helix_host_core
-     src/Parameters.cu
-     src/Psd/Eigval.cu
-     src/Psd/Psd.cu
+     src/parameters.cu
+     src/psd/eigenvalues.cu
+     src/psd/psd.cu
+
+   helix_core
+     include/helix/*.h
+     src/helix.cpp
+     src/library/legacy_runtime_session.cu
+     src/parameters.cu
+     src/psd/eigenvalues.cu
+     src/psd/psd.cu
+     src/initialize.cu
+     src/liouville.cu
+     src/matrix_storage.cu
+     src/matrix_util.cu
+     exported as HELIX::helix
+     links CUDA::cublas, CUDA::cusparse
 
    helix
-     src/Main.cu
-     src/Initialize.cu
-     src/Liouville.cu
-     src/Matrixes.cu
-     src/MatrixUtil.cu
-     links helix_host_core, CUDA::cublas, CUDA::cusparse
+     src/main.cu
+     links helix_core, CUDA::cublas, CUDA::cusparse
 
 ``helix_host_core`` owns host-side helpers and reference logic that can be used
-by unit tests without linking cuBLAS or cuSPARSE. The executable owns CUDA
-runtime execution and legacy file output.
+by unit tests without linking cuBLAS or cuSPARSE. ``helix_core`` owns the
+installable C++ library target and the public ``HELIX::helix`` alias while still
+wrapping the legacy CUDA runtime internally. The executable owns CLI
+compatibility and legacy file output.
 
-Runtime Flow
+When ``HELIX_BUILD_PYTHON=ON`` is configured, CMake also builds the optional
+``helix_python`` pybind11 module for the build-tree smoke path.
+
+Runtime flow
 ------------
 
 The executable follows this sequence:
@@ -57,10 +72,10 @@ The executable follows this sequence:
 alias. Invalid or missing values fall back to the legacy default of 1,000,000
 steps.
 
-Numerical Profile
+Numerical profile
 -----------------
 
-The default compiled profile is defined in ``src/DefineParameters.h``:
+The default compiled profile is defined in ``src/legacy_compile_options.h``:
 
 * ``H_DIAGONAL`` is enabled.
 * ``USE_COUNTER`` is enabled.
@@ -70,41 +85,41 @@ The default compiled profile is defined in ``src/DefineParameters.h``:
 The default static parameters include ``Param::N=1024``, ``Param::KMax=2``,
 ``Param::JMax=3``, and a default hierarchy size of 10. The checked-in baseline
 ``examples/outputEnergy.txt`` corresponds to ``HELIX_STEPS=1980`` and contains
-1981 rows.
+1981 rows; the default full verification gate compares the
+``HELIX_STEPS=1000`` prefix.
 
-State Ownership
+State ownership
 ---------------
 
 The current runtime uses explicit global state:
 
-* ``Matrixes.*`` owns global device vectors such as ``dH``, ``dV``, ``dNu``,
+* ``matrix_storage.*`` owns global device vectors such as ``dH``, ``dV``, ``dNu``,
   ``dRho``, hierarchy storage, sparse operator storage, and
   ``clearMatrixStorage()``.
-* ``Liouville.cu`` owns sparse propagation caches, CUDA streams, cuBLAS handles,
+* ``liouville.cu`` owns sparse propagation caches, CUDA streams, cuBLAS handles,
   cuSPARSE handles, the matrix descriptor, and ``clearLiouvilleStorage()``.
-* ``Parameters.*`` owns static default parameters and the global
+* ``parameters.*`` owns static default parameters and the global
   ``cublasHandle``.
 
 Cleanup is part of the runtime contract. Tests and integrations that call
 ``initialize()`` and ``develop()`` in-process must also clear Liouville storage,
 clear matrix storage, and destroy ``cublasHandle`` when they are done.
 
-GPU Execution
+GPU execution
 -------------
 
 The default propagation path is sparse and host-orchestrated. It uses cuSPARSE
 for sparse-dense products, cuBLAS for dense vector operations, CUDA streams per
-hierarchy row, and a CUDA 13 compatibility wrapper in ``TypeDef.h`` for the
+hierarchy row, and a CUDA 13 compatibility wrapper in ``cuda_types.h`` for the
 removed legacy ``cusparseCcsrmm`` and ``cusparseCcsrmm2`` entry points.
 
 The old dynamic dense path remains guarded behind ``DYNAMIC_DENSE`` and should
 not be treated as the active supported path unless it is explicitly restored and
 verified.
 
-Library Boundary Direction
+Library boundary direction
 --------------------------
 
-The next architectural pressure point is replacing implicit global lifecycle
-with an explicit HEOM context or facade. Until that boundary exists, the
-executable remains the authoritative regression harness and public behavior
-contract.
+The next step is replacing implicit global lifecycle with an explicit HEOM
+context or facade. Until that boundary exists, the executable remains the
+regression harness and public behavior contract.

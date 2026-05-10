@@ -2,10 +2,11 @@ Tutorials
 =========
 
 Tutorial pages should be executable or traceable to repository commands. The
-current tutorial surface focuses on the executable baseline while the C++ and
-Python library APIs are still evolving.
+baseline tutorial covers the legacy executable workflow; the C++ tutorial covers
+the v0.1 library foundation example.
 
 .. toctree::
    :maxdepth: 2
 
    baseline-run
+   cpp-library-example

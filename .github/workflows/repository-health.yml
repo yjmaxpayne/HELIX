@@ -3,7 +3,6 @@ name: Repository Health
 on:
   pull_request:
   push:
-    branches: [main]
 
 permissions:
   contents: read
@@ -29,7 +28,7 @@ jobs:
           test -f SECURITY.md
           test -f CHANGELOG.md
           test -f CMakeLists.txt
-          test -f cmake/HelixVersion.cmake
+          test -f cmake/helix_version.cmake
           test -f .github/release-drafter.yml
           test -x scripts/verify_examples.sh
           test -x scripts/package_release.sh
@@ -41,6 +40,113 @@ jobs:
         run: |
           if grep -En '^[[:space:]]*pull_request(_target)?:' .github/workflows/release-drafter.yml; then
             echo "Release Drafter must not run on pull request events because its config is read from the default branch." >&2
+            exit 1
+          fi
+
+      - name: Check workflow dispatch input names
+        run: |
+          invalid_inputs="$(
+            awk '
+              FNR == 1 { in_dispatch = 0; in_inputs = 0 }
+              /^[^[:space:]]/ { in_dispatch = 0; in_inputs = 0 }
+              /^[[:space:]]+workflow_dispatch:/ { in_dispatch = 1; in_inputs = 0; next }
+              in_dispatch && /^[[:space:]]+inputs:/ { in_inputs = 1; next }
+              in_inputs && /^[[:space:]]{0,5}[^[:space:]]/ { in_inputs = 0 }
+              in_inputs && /^[[:space:]]{6}[A-Za-z0-9_-]+:/ {
+                key = $1
+                sub(":", "", key)
+                if (key == "steps") {
+                  print FILENAME ":" FNR ": workflow_dispatch input id steps conflicts with GitHub Actions step contexts; use helix_steps"
+                }
+              }
+            ' .github/workflows/*.yml
+          )"
+          if [[ -n "${invalid_inputs}" ]]; then
+            echo "${invalid_inputs}" >&2
+            exit 1
+          fi
+
+      - name: Check runner context scope
+        run: |
+          invalid_runner_context="$(
+            awk '
+              /^[^[:space:]]/ {
+                top = $1
+                sub(":", "", top)
+                in_jobs = (top == "jobs")
+                in_job_env = 0
+                next
+              }
+              in_jobs && /^[[:space:]]{2}[A-Za-z0-9_-]+:/ {
+                in_job_env = 0
+                next
+              }
+              in_jobs && /^[[:space:]]{4}env:/ {
+                in_job_env = 1
+                next
+              }
+              in_jobs && /^[[:space:]]{4}[A-Za-z0-9_-]+:/ {
+                in_job_env = 0
+              }
+              in_job_env && /\$\{\{[[:space:]]*runner\./ {
+                print FILENAME ":" FNR ": runner context is not available in jobs.<job_id>.env; move this value to steps.env or write it via GITHUB_ENV"
+              }
+            ' .github/workflows/*.yml
+          )"
+          if [[ -n "${invalid_runner_context}" ]]; then
+            echo "${invalid_runner_context}" >&2
+            exit 1
+          fi
+
+      - name: Check CI push coverage
+        run: |
+          for workflow in \
+            .github/workflows/cuda-smoke.yml \
+            .github/workflows/docs.yml \
+            .github/workflows/repository-health.yml
+          do
+            invalid_push="$(
+              awk '
+                /^[^[:space:]]/ {
+                  in_on = ($0 == "on:")
+                  in_push = 0
+                  next
+                }
+                in_on && /^[[:space:]]{2}push:/ {
+                  saw_push = 1
+                  in_push = 1
+                  next
+                }
+                in_push && /^[[:space:]]{2}[A-Za-z0-9_-]+:/ {
+                  in_push = 0
+                }
+                in_push && /^[[:space:]]{4}(branches|branches-ignore|tags|tags-ignore):/ {
+                  print FILENAME ":" FNR ": CI workflows must run on every branch push; do not filter push refs here"
+                }
+                END {
+                  if (!saw_push) {
+                    print FILENAME ": missing push trigger for per-commit CI coverage"
+                  }
+                }
+              ' "${workflow}"
+            )"
+            if [[ -n "${invalid_push}" ]]; then
+              echo "${invalid_push}" >&2
+              exit 1
+            fi
+          done
+
+      - name: Check CUDA CI CTest coverage
+        run: |
+          workflow=.github/workflows/cuda-smoke.yml
+          required_ctest='ctest --test-dir "${HELIX_BUILD_DIR}" --output-on-failure -LE "^(sanitizer|benchmark)$"'
+          if ! grep -Fq "${required_ctest}" "${workflow}"; then
+            echo "CUDA CI must run the ordinary CTest suite and exclude only sanitizer/benchmark labels." >&2
+            echo "Expected command: ${required_ctest}" >&2
+            exit 1
+          fi
+          if grep -Eq 'ctest --test-dir "\$\{HELIX_BUILD_DIR\}" -L (unit|cuda|integration)([[:space:]]|$)' "${workflow}"; then
+            echo "CUDA CI must not fall back to smoke-only unit/cuda/integration label selection." >&2
             exit 1
           fi
 

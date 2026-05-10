@@ -1,8 +1,8 @@
 ==============
-Build and Test
+Build and test
 ==============
 
-Build Commands
+Build commands
 --------------
 
 .. code-block:: bash
@@ -13,7 +13,7 @@ Build Commands
 Use ``-DHELIX_CUDA_ARCHITECTURES=<arch>`` when automatic GPU architecture
 detection is not available.
 
-CTest Labels
+CTest labels
 ------------
 
 Register tests with ``helix_add_test()`` in ``CMakeLists.txt``. The accepted
@@ -39,7 +39,7 @@ Useful selectors:
    ctest --test-dir build/cmake -L cuda -N
    ctest --test-dir build/cmake -L numerical --output-on-failure
 
-Numerical Changes
+Numerical changes
 -----------------
 
 Cleanup-only changes must preserve HEOM numerical semantics. For intentional
