@@ -2,7 +2,7 @@
 Glossary
 ========
 
-This glossary defines terms used throughout the HELIX documentation.
+Terms used throughout the HELIX documentation.
 
 .. glossary::
    :sorted:

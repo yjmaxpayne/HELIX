@@ -1,11 +1,11 @@
-Release Process
+Release process
 ===============
 
-HELIX release packaging is driven by ``scripts/package_release.sh`` and the
-``Release`` GitHub Actions workflow. Release builds run on a CUDA-capable
-self-hosted runner.
+``scripts/package_release.sh`` and the ``Release`` GitHub Actions workflow drive
+HELIX release packaging. Release builds run on a CUDA-capable self-hosted
+runner.
 
-Version Source
+Version source
 --------------
 
 HELIX follows Semantic Versioning and uses Git tags as the product-version
@@ -20,16 +20,16 @@ At configure time, CMake resolves the version in this order:
 * the nearest matching Git tag from ``git describe --tags --match 'v[0-9]*'``;
 * ``0.0.1`` as a fallback for source snapshots before the first tag exists.
 
-The configured version is exposed through ``helix --version`` and recorded in
-the release package manifest. The Python ``pyproject.toml`` in this repository
-only describes the documentation environment; it is not the HELIX product
-version.
+CMake exposes the configured version through ``helix --version`` and records it
+in the release package manifest. The Python ``pyproject.toml`` in this
+repository only describes the documentation environment; it is not the HELIX
+product version.
 
-Changelog and Draft Notes
+Changelog and draft notes
 -------------------------
 
-``CHANGELOG.md`` is the canonical human-readable release history. Formal
-release entries should be generated from Conventional Commit history:
+``CHANGELOG.md`` is the canonical human-readable release history. Generate
+formal release entries from Conventional Commit history:
 
 .. code-block:: bash
 
@@ -43,19 +43,19 @@ PR labels drive the release-note categories and version resolver:
 * ``minor`` for backward-compatible features;
 * ``patch`` for backward-compatible fixes.
 
-Release Gate
+Release gate
 ------------
 
 The release workflow performs the full baseline verification before packaging:
 
 .. code-block:: bash
 
-   HELIX_STEPS=1980 scripts/verify_examples.sh
+   HELIX_STEPS=1000 scripts/verify_examples.sh
 
 The run must compare ``outputEnergy.txt`` against ``examples/outputEnergy.txt``
 successfully before an artifact is published.
 
-Package Contents
+Package contents
 ----------------
 
 The release package contains:
@@ -82,9 +82,9 @@ For a local release-candidate build:
 
 .. code-block:: bash
 
-   HELIX_RELEASE_VERSION=v0.0.1 HELIX_STEPS=1980 scripts/verify_examples.sh
+   HELIX_RELEASE_VERSION=v0.0.1 HELIX_STEPS=1000 scripts/verify_examples.sh
    scripts/package_release.sh v0.0.1
 
-Documentation is built by the separate ``Documentation`` workflow. On pushes to
-``main``, the workflow uploads the Sphinx HTML site as a GitHub Pages artifact
-and deploys it through the repository's GitHub Actions Pages source.
+The separate ``Documentation`` workflow builds the docs. On pushes to ``main``,
+the workflow uploads the Sphinx HTML site as a GitHub Pages artifact and deploys
+it through the repository's GitHub Actions Pages source.

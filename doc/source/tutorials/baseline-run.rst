@@ -1,9 +1,8 @@
 =====================
-Baseline Run Tutorial
+Baseline run tutorial
 =====================
 
-This tutorial runs HELIX in the same shape used by the smoke verification
-workflow.
+This runs HELIX in the same shape used by the smoke verification workflow.
 
 1. Build the executable:
 
@@ -32,5 +31,5 @@ workflow.
 
       HELIX_STEPS=2 scripts/verify_examples.sh
 
-For numerical changes, replace ``HELIX_STEPS=2`` with ``HELIX_STEPS=1980`` and
-compare against the full checked-in energy trace.
+For numerical changes, replace ``HELIX_STEPS=2`` with ``HELIX_STEPS=1000`` and
+compare against the checked-in energy trace prefix.

@@ -3,10 +3,10 @@ Documentation
 =============
 
 HELIX uses Sphinx with Furo, MyST, Doxygen, Breathe, and Python autodoc. This
-matches the documentation stack used by the companion emulator-platform project
-while keeping C++/CUDA API extraction active for HELIX.
+matches the companion emulator-platform docs stack, and it keeps C++/CUDA API
+extraction active for HELIX.
 
-Local Environment
+Local environment
 -----------------
 
 Create an ignored virtual environment under ``build/``:
@@ -24,14 +24,14 @@ Build with warnings promoted to errors:
    SPHINXBUILD="$PWD/build/docs-venv/bin/sphinx-build" \
      make -C doc html SPHINXOPTS="-W --keep-going"
 
-API Documentation
+API documentation
 -----------------
 
-* C++/CUDA API pages are generated from ``include/`` and selected ``src/``
-  headers with Doxygen and Breathe.
-* ``doc/Doxyfile.in`` is the tracked Doxygen template. The concrete Doxyfile is
-  generated under ``doc/_doxygen/`` during the Sphinx build.
-* Python API pages are reserved for future bindings and will use autodoc,
+* Doxygen and Breathe generate C++/CUDA API pages from ``include/`` and
+  selected ``src/`` headers.
+* ``doc/Doxyfile.in`` is the tracked Doxygen template. The Sphinx build writes
+  the concrete Doxyfile under ``doc/_doxygen/``.
+* Python API pages are placeholders for later bindings and will use autodoc,
   autosummary, napoleon, doctest, and viewcode.
 * Keep implementation details in generated API pages and design rationale in
   architecture or core-concepts pages.
@@ -45,7 +45,7 @@ and deploys to GitHub Pages on pushes to ``main``. The canonical HELIX
 repository uses the GitHub Actions Pages source and publishes to
 ``https://yjmaxpayne.github.io/HELIX/`` after a successful ``main`` deployment.
 
-Dependency Boundary
+Dependency boundary
 -------------------
 
 ``pyproject.toml`` manages Python documentation dependencies. Doxygen is a

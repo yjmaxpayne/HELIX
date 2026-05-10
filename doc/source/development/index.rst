@@ -2,8 +2,8 @@
 Development
 ===========
 
-This section provides guidance for contributing to HELIX, including build
-commands, testing practice, numerical-change rules, and documentation workflow.
+Contributor docs cover build commands, testing practice, numerical-change
+rules, and the documentation workflow.
 
 .. toctree::
    :maxdepth: 2
@@ -19,7 +19,7 @@ HELIX is under active modernization. Keep changes small, preserve the current
 baseline behavior unless a numerical change is intentional, and pair GPU
 execution changes with targeted CTest coverage.
 
-Project Structure
+Project structure
 -----------------
 
 .. code-block:: text
@@ -40,7 +40,7 @@ Project Structure
    ├── scripts/                # Verification and release helpers
    └── doc/                    # Sphinx documentation
 
-Development Principles
+Development principles
 ----------------------
 
 * Preserve numerical semantics in cleanup-only changes.

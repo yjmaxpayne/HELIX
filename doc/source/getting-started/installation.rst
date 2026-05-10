@@ -5,29 +5,29 @@ Installation
 HELIX is currently distributed as source. The active build path is CMake with
 the CUDA toolkit.
 
-System Requirements
+System requirements
 -------------------
 
-**Compiler and Build Tools**
+Compiler and build tools:
 
 * CMake 3.24+
 * GCC or another C++17-capable host compiler compatible with the installed CUDA
   toolkit
 * CUDA Toolkit 13.0+
 
-**GPU Runtime**
+GPU runtime:
 
 * CUDA-capable NVIDIA GPU
 * cuBLAS
 * cuSPARSE
 
-**Documentation Environment**
+Documentation environment:
 
 * Python 3.11+
 * Doxygen for C++/CUDA API extraction
 * Sphinx dependencies from the ``docs`` extra in ``pyproject.toml``
 
-Build From Source
+Build from source
 -----------------
 
 From the repository root:
@@ -46,7 +46,7 @@ If GPU architecture detection fails, pass the architecture explicitly:
 
 The executable is written to ``build/cmake/helix``.
 
-Documentation Environment
+Documentation environment
 -------------------------
 
 Use an ignored virtual environment under ``build/`` for local documentation
@@ -65,8 +65,8 @@ Build the documentation with the virtual environment:
    SPHINXBUILD="$PWD/build/docs-venv/bin/sphinx-build" \
      make -C doc html SPHINXOPTS="-W --keep-going"
 
-The Sphinx configuration already enables Python autodoc and inserts these
-future binding paths:
+The Sphinx configuration enables Python autodoc and adds these planned binding
+paths:
 
 * ``python/``
 * ``src/python/``

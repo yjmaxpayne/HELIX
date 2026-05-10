@@ -1,12 +1,11 @@
 .. _api-reference:
 
 =============
-API Reference
+API reference
 =============
 
-This section documents the current HELIX C++ library foundation and selected
-source-level implementation interfaces. It also reserves a Python API structure
-for future bindings.
+These pages document HELIX C++ headers and implementation interfaces used by the
+executable. The Python page is a placeholder for later bindings.
 
 .. toctree::
    :maxdepth: 2
@@ -16,7 +15,7 @@ for future bindings.
    python
    generated
 
-Module Overview
+Module overview
 ---------------
 
 .. list-table::
@@ -26,16 +25,16 @@ Module Overview
    * - Module
      - Description
    * - :doc:`cpp`
-     - Current C++ public headers under ``include/helix`` plus selected CUDA
+     - C++ public headers under ``include/helix`` plus selected CUDA
        implementation headers under ``src/``.
    * - :doc:`python`
-     - Reserved documentation structure for future Python bindings.
+     - Placeholder documentation structure for later Python bindings.
    * - :doc:`generated`
-     - Generated Doxygen/Breathe pages for selected C++/CUDA headers.
+     - Doxygen/Breathe pages for selected C++/CUDA headers.
 
-API Status
+API status
 ----------
 
-The executable is stable enough for baseline verification. The
-``include/helix`` headers describe the v0.1 library foundation; selected
-``src`` headers remain implementation references rather than ABI promises.
+The executable can run baseline verification. The ``include/helix`` headers
+describe the v0.1 library starting point; selected ``src`` headers remain
+implementation references rather than ABI promises.

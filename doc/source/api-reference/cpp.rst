@@ -1,16 +1,16 @@
-C++/CUDA Source API
+C++/CUDA source API
 ===================
 
-The C++/CUDA API pages are generated from ``include/`` and selected ``src/``
-headers. They document the v0.1 public C++ foundation together with the current
-implementation surface used by the executable and tests.
+Doxygen and Breathe generate the C++/CUDA API pages from ``include/`` and
+selected ``src/`` headers. The pages cover the v0.1 public C++ headers and the
+implementation interfaces used by the executable and tests.
 
-Architecture Mapping
+Architecture mapping
 --------------------
 
 .. code-block:: text
 
-   include/helix/               public v0.1 C++ library foundation
+   include/helix/               public v0.1 C++ headers
    ├── helix.h                  aggregate public include
    ├── types.h                  Context, HEOMSolver, System, Bath, results
    ├── examples.h               legacy spin-glass adapter declaration
@@ -36,10 +36,10 @@ Conventions
 * Legacy source files use tabs for block indentation.
 * Source and test file names use ``lower_snake_case``.
 * Local helper functions generally use camelCase.
-* ``include/helix`` is the current public C++ foundation.
+* ``include/helix`` is the public C++ API starting point.
 * Selected ``src`` pages are implementation references, not ABI promises.
 
-Generated Index
+Generated index
 ---------------
 
 See :doc:`generated` for Doxygen/Breathe pages over the selected public

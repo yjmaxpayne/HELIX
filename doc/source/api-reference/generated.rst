@@ -1,11 +1,11 @@
-Generated C++/CUDA Reference
+Generated C++/CUDA reference
 ============================
 
-This page is generated from public headers in ``include/helix`` and selected
-implementation headers in the current ``src/`` tree. The ``*.cu`` translation
-units are still parsed by Doxygen so cross-references can resolve, but this
-Sphinx page avoids rendering the raw Doxygen global index. That keeps anonymous
-implementation namespaces out of the C++ API surface.
+Doxygen reads public headers in ``include/helix`` and selected implementation
+headers in the current ``src/`` tree. It still parses the ``*.cu`` translation
+units so cross-references can resolve, but this Sphinx page avoids rendering the
+raw Doxygen global index. That keeps anonymous implementation namespaces out of
+the C++ API surface.
 
 .. only:: no_doxygen
 
@@ -28,13 +28,13 @@ implementation namespaces out of the C++ API surface.
    .. doxygenfile:: parameters.h
       :project: HELIX
 
-   Compile-Time Profile
+   Compile-time profile
    --------------------
 
    .. doxygenfile:: legacy_compile_options.h
       :project: HELIX
 
-   Scalar and CUDA Compatibility Types
+   Scalar and CUDA compatibility types
    -----------------------------------
 
    .. doxygenfile:: cuda_types.h
@@ -50,13 +50,13 @@ implementation namespaces out of the C++ API surface.
       :project: HELIX
       :members:
 
-   Liouville Propagation
+   Liouville propagation
    ---------------------
 
    .. doxygenfile:: liouville.h
       :project: HELIX
 
-   Matrix Storage and Utilities
+   Matrix storage and utilities
    ----------------------------
 
    .. doxygenfile:: matrix_storage.h
@@ -65,7 +65,7 @@ implementation namespaces out of the C++ API surface.
    .. doxygenfile:: matrix_util.h
       :project: HELIX
 
-   Pade Spectrum Decomposition
+   Pade spectrum decomposition
    ---------------------------
 
    .. doxygenfile:: psd.h

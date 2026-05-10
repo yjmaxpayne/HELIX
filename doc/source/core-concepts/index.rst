@@ -1,8 +1,8 @@
 =============
-Core Concepts
+Core concepts
 =============
 
-This section defines the concepts used throughout the HELIX documentation.
+These pages define the concepts used throughout the HELIX documentation.
 
 .. toctree::
    :maxdepth: 2
@@ -13,7 +13,7 @@ This section defines the concepts used throughout the HELIX documentation.
    gpu-execution
    baselines
 
-Concept Map
+Concept map
 -----------
 
 .. list-table::
@@ -22,13 +22,13 @@ Concept Map
 
    * - Concept
      - Description
-   * - **HEOM**
+   * - HEOM
      - Hierarchical Equations of Motion for open quantum system dynamics.
-   * - **Hierarchy State**
+   * - Hierarchy state
      - Reduced density matrix plus auxiliary density operators.
-   * - **Sparse Runtime**
+   * - Sparse runtime
      - Default CUDA 13 path using host-orchestrated cuBLAS/cuSPARSE work.
-   * - **Energy Baseline**
+   * - Energy baseline
      - Reference ``outputEnergy.txt`` trace used to detect numerical drift.
-   * - **Lifecycle Boundary**
-     - Current global state cleanup contract and future explicit context.
+   * - Lifecycle boundary
+     - Current global state cleanup contract and eventual explicit context.

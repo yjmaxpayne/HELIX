@@ -1,12 +1,11 @@
 =============
-Runtime Model
+Runtime model
 =============
 
 The current runtime is a legacy executable workflow with explicit global CUDA
-state. This model is stable enough for regression testing but not the final
-library API.
+state. It works for regression testing, but it is not the final library API.
 
-Execution Sequence
+Execution sequence
 ------------------
 
 .. code-block:: text
@@ -26,7 +25,7 @@ Execution Sequence
 
    final output and cleanup
 
-Cleanup Contract
+Cleanup contract
 ----------------
 
 Code that calls runtime functions in-process must release global resources:
@@ -38,9 +37,9 @@ Code that calls runtime functions in-process must release global resources:
    cublasDestroy(cublasHandle);
    cublasHandle = nullptr;
 
-Future Direction
-----------------
+Next library boundary
+---------------------
 
-The planned library boundary is an explicit HEOM context that owns parameters,
-device vectors, CUDA handles, sparse caches, and output policy. That boundary
-will be the natural anchor for a future Python API.
+The library boundary should be an explicit HEOM context that owns parameters,
+device vectors, CUDA handles, sparse caches, and output policy. Python bindings
+should start from that boundary once it exists.

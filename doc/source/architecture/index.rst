@@ -2,10 +2,10 @@ Architecture
 ============
 
 HELIX keeps the legacy executable behavior intact while carving out tested
-boundaries for a future reusable HEOM runtime. The architecture is therefore a
-controlled modernization of global CUDA state, not a clean library design yet.
+boundaries for reusable runtime work. It is a controlled modernization of global
+CUDA state, not a clean library design yet.
 
-Build Targets
+Build targets
 -------------
 
 The CMake target graph has three production targets:
@@ -41,7 +41,7 @@ installable C++ library target and the public ``HELIX::helix`` alias while still
 wrapping the legacy CUDA runtime internally. The executable owns CLI
 compatibility and legacy file output.
 
-Runtime Flow
+Runtime flow
 ------------
 
 The executable follows this sequence:
@@ -69,7 +69,7 @@ The executable follows this sequence:
 alias. Invalid or missing values fall back to the legacy default of 1,000,000
 steps.
 
-Numerical Profile
+Numerical profile
 -----------------
 
 The default compiled profile is defined in ``src/legacy_compile_options.h``:
@@ -82,9 +82,10 @@ The default compiled profile is defined in ``src/legacy_compile_options.h``:
 The default static parameters include ``Param::N=1024``, ``Param::KMax=2``,
 ``Param::JMax=3``, and a default hierarchy size of 10. The checked-in baseline
 ``examples/outputEnergy.txt`` corresponds to ``HELIX_STEPS=1980`` and contains
-1981 rows.
+1981 rows; the default full verification gate compares the
+``HELIX_STEPS=1000`` prefix.
 
-State Ownership
+State ownership
 ---------------
 
 The current runtime uses explicit global state:
@@ -101,7 +102,7 @@ Cleanup is part of the runtime contract. Tests and integrations that call
 ``initialize()`` and ``develop()`` in-process must also clear Liouville storage,
 clear matrix storage, and destroy ``cublasHandle`` when they are done.
 
-GPU Execution
+GPU execution
 -------------
 
 The default propagation path is sparse and host-orchestrated. It uses cuSPARSE
@@ -113,10 +114,9 @@ The old dynamic dense path remains guarded behind ``DYNAMIC_DENSE`` and should
 not be treated as the active supported path unless it is explicitly restored and
 verified.
 
-Library Boundary Direction
+Library boundary direction
 --------------------------
 
-The next architectural pressure point is replacing implicit global lifecycle
-with an explicit HEOM context or facade. Until that boundary exists, the
-executable remains the authoritative regression harness and public behavior
-contract.
+The next step is replacing implicit global lifecycle with an explicit HEOM
+context or facade. Until that boundary exists, the executable remains the
+regression harness and public behavior contract.
