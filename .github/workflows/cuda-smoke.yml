@@ -6,7 +6,7 @@ on:
     branches: [main]
   workflow_dispatch:
     inputs:
-      steps:
+      helix_steps:
         description: HELIX_STEPS value for smoke run
         required: true
         default: "2"
@@ -35,7 +35,7 @@ jobs:
     runs-on: self-hosted
     timeout-minutes: 20
     env:
-      HELIX_STEPS: ${{ github.event.inputs.steps || '2' }}
+      HELIX_STEPS: ${{ github.event.inputs.helix_steps || '2' }}
       HELIX_CUDA_ARCHITECTURES: ${{ github.event.inputs.cuda_architectures || '89' }}
       HELIX_BUILD_DIR: ${{ runner.temp }}/helix-build
       HELIX_RUN_DIR: ${{ runner.temp }}/helix-run
