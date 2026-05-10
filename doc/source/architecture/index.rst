@@ -8,7 +8,7 @@ controlled modernization of global CUDA state, not a clean library design yet.
 Build Targets
 -------------
 
-The CMake target graph has two production targets:
+The CMake target graph has three production targets:
 
 .. code-block:: text
 
@@ -17,17 +17,29 @@ The CMake target graph has two production targets:
      src/psd/eigenvalues.cu
      src/psd/psd.cu
 
-   helix
-     src/main.cu
+   helix_core
+     include/helix/*.h
+     src/helix.cpp
+     src/library/legacy_runtime_session.cu
+     src/parameters.cu
+     src/psd/eigenvalues.cu
+     src/psd/psd.cu
      src/initialize.cu
      src/liouville.cu
      src/matrix_storage.cu
      src/matrix_util.cu
-     links helix_host_core, CUDA::cublas, CUDA::cusparse
+     exported as HELIX::helix
+     links CUDA::cublas, CUDA::cusparse
+
+   helix
+     src/main.cu
+     links helix_core, CUDA::cublas, CUDA::cusparse
 
 ``helix_host_core`` owns host-side helpers and reference logic that can be used
-by unit tests without linking cuBLAS or cuSPARSE. The executable owns CUDA
-runtime execution and legacy file output.
+by unit tests without linking cuBLAS or cuSPARSE. ``helix_core`` owns the
+installable C++ library target and the public ``HELIX::helix`` alias while still
+wrapping the legacy CUDA runtime internally. The executable owns CLI
+compatibility and legacy file output.
 
 Runtime Flow
 ------------

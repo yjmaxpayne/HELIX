@@ -27,7 +27,8 @@ Build with warnings promoted to errors:
 API Documentation
 -----------------
 
-* C++/CUDA API pages are generated from ``src/`` with Doxygen and Breathe.
+* C++/CUDA API pages are generated from ``include/`` and selected ``src/``
+  headers with Doxygen and Breathe.
 * ``doc/Doxyfile.in`` is the tracked Doxygen template. The concrete Doxyfile is
   generated under ``doc/_doxygen/`` during the Sphinx build.
 * Python API pages are reserved for future bindings and will use autodoc,

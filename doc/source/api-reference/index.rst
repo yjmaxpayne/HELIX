@@ -4,8 +4,9 @@
 API Reference
 =============
 
-This section documents the current HELIX source-level interfaces and reserves a
-Python API structure for future bindings.
+This section documents the current HELIX C++ library foundation and selected
+source-level implementation interfaces. It also reserves a Python API structure
+for future bindings.
 
 .. toctree::
    :maxdepth: 2
@@ -25,7 +26,8 @@ Module Overview
    * - Module
      - Description
    * - :doc:`cpp`
-     - Current C++/CUDA implementation surface under ``src/``.
+     - Current C++ public headers under ``include/helix`` plus selected CUDA
+       implementation headers under ``src/``.
    * - :doc:`python`
      - Reserved documentation structure for future Python bindings.
    * - :doc:`generated`
@@ -34,6 +36,6 @@ Module Overview
 API Status
 ----------
 
-The executable is stable enough for baseline verification. The C++/CUDA headers
-are internal implementation interfaces until an explicit HEOM context and
-installable library boundary are introduced.
+The executable is stable enough for baseline verification. The
+``include/helix`` headers describe the v0.1 library foundation; selected
+``src`` headers remain implementation references rather than ABI promises.

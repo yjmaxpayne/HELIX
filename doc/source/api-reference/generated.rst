@@ -1,10 +1,11 @@
 Generated C++/CUDA Reference
 ============================
 
-This page is generated from public header files in the current ``src/`` tree.
-The ``*.cu`` translation units are still parsed by Doxygen so cross-references
-can resolve, but this Sphinx page avoids rendering the raw Doxygen global index.
-That keeps anonymous implementation namespaces out of the C++ API surface.
+This page is generated from public headers in ``include/helix`` and selected
+implementation headers in the current ``src/`` tree. The ``*.cu`` translation
+units are still parsed by Doxygen so cross-references can resolve, but this
+Sphinx page avoids rendering the raw Doxygen global index. That keeps anonymous
+implementation namespaces out of the C++ API surface.
 
 .. only:: no_doxygen
 
@@ -13,6 +14,13 @@ That keeps anonymous implementation namespaces out of the C++ API surface.
    C++/CUDA symbol index.
 
 .. only:: not no_doxygen
+
+   Public C++ API
+   --------------
+
+   .. doxygennamespace:: helix
+      :project: HELIX
+      :members:
 
    Parameters
    ----------

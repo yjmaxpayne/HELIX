@@ -85,7 +85,7 @@ ctest --test-dir build/cmake -L sanitizer --output-on-failure
 
 The `sanitizer` label runs `compute-sanitizer --tool memcheck` and writes reports under `build/cmake/sanitizer/` unless `HELIX_SANITIZER_REPORT_DIR` is set.
 
-Gate ownership is split by cost: `unit`, `cuda`, and `integration` run in the CUDA smoke pull-request workflow; `sanitizer` is a manual pre-merge workflow dispatch option; the full 1980-step baseline runs in the scheduled/manual numerical baseline workflow and in release packaging.
+Gate ownership is split by cost: the CUDA CI workflow runs the ordinary CTest suite except `sanitizer` and `benchmark`, then runs the `HELIX_STEPS=2` compatibility smoke; `sanitizer` is a manual workflow dispatch option; the full 1980-step baseline runs in the scheduled/manual numerical baseline workflow and in release packaging.
 
 Current full verification on the environment above, from the 2026-05-09 final baseline:
 
@@ -105,9 +105,9 @@ Current full verification on the environment above, from the 2026-05-09 final ba
 
 ## Documentation
 
-Sphinx documentation lives in `doc/source`. API pages are generated from `src/`
-with Doxygen and Breathe. Python autodoc support is already enabled for future
-bindings:
+Sphinx documentation lives in `doc/source`. API pages are generated from
+`include/` and selected `src/` headers with Doxygen and Breathe. Python autodoc
+support is already enabled for future bindings:
 
 ```bash
 python3 -m venv build/docs-venv

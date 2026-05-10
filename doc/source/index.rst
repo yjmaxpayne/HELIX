@@ -31,9 +31,9 @@ is the ``helix`` executable; the source tree is being refactored toward a
 reusable HEOM runtime and future Python-facing API.
 
 The documentation is source-driven. C++/CUDA API pages are generated from
-``src/`` with Doxygen and Breathe. Python autodoc, MyST, doctest, and viewcode
-are already enabled so future Python bindings can be documented without
-rebuilding the documentation stack.
+``include/`` and selected ``src/`` headers with Doxygen and Breathe. Python
+autodoc, MyST, doctest, and viewcode are already enabled so future Python
+bindings can be documented without rebuilding the documentation stack.
 
 What is HELIX?
 ==============
@@ -142,7 +142,7 @@ For the repository verification wrapper:
 Current Status
 --------------
 
-The executable is the authoritative regression harness. The C++/CUDA headers
-are documented as source-level implementation references, not as a stable
-installed library ABI. The next API milestone is an explicit lifecycle context
-that can support both C++ and Python-facing entry points.
+The executable remains the authoritative regression harness. The
+``include/helix`` headers expose the v0.1 C++ library foundation, while selected
+``src`` headers are documented as implementation references for the current
+legacy CUDA runtime.

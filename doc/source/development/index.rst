@@ -25,8 +25,11 @@ Project Structure
 .. code-block:: text
 
    HELIX/
+   ├── include/helix/          # Public v0.1 C++ library headers
    ├── src/                    # C++/CUDA production source
+   │   ├── library/            # Legacy runtime session wrapper
    │   ├── psd/                # Pade spectrum decomposition helpers
+   │   ├── helix.cpp           # Public API implementation over legacy runtime
    │   ├── main.cu             # Legacy executable workflow
    │   ├── initialize.*        # System, bath, hierarchy, rho setup
    │   ├── liouville.*         # Propagation and dRho evaluation
