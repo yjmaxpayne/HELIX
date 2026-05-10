@@ -3,7 +3,6 @@ name: CUDA Smoke
 on:
   pull_request:
   push:
-    branches: [main]
   workflow_dispatch:
     inputs:
       helix_steps:

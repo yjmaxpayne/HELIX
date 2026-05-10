@@ -3,7 +3,6 @@ name: Repository Health
 on:
   pull_request:
   push:
-    branches: [main]
 
 permissions:
   contents: read
@@ -98,6 +97,44 @@ jobs:
             echo "${invalid_runner_context}" >&2
             exit 1
           fi
+
+      - name: Check CI push coverage
+        run: |
+          for workflow in \
+            .github/workflows/cuda-smoke.yml \
+            .github/workflows/docs.yml \
+            .github/workflows/repository-health.yml
+          do
+            invalid_push="$(
+              awk '
+                /^[^[:space:]]/ {
+                  in_on = ($0 == "on:")
+                  in_push = 0
+                  next
+                }
+                in_on && /^[[:space:]]{2}push:/ {
+                  saw_push = 1
+                  in_push = 1
+                  next
+                }
+                in_push && /^[[:space:]]{2}[A-Za-z0-9_-]+:/ {
+                  in_push = 0
+                }
+                in_push && /^[[:space:]]{4}(branches|branches-ignore|tags|tags-ignore):/ {
+                  print FILENAME ":" FNR ": CI workflows must run on every branch push; do not filter push refs here"
+                }
+                END {
+                  if (!saw_push) {
+                    print FILENAME ": missing push trigger for per-commit CI coverage"
+                  }
+                }
+              ' "${workflow}"
+            )"
+            if [[ -n "${invalid_push}" ]]; then
+              echo "${invalid_push}" >&2
+              exit 1
+            fi
+          done
 
       - name: Check GitHub Pages source contract
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
