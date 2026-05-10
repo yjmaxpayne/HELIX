@@ -132,3 +132,106 @@ jobs:
               --generate-notes \
               "${prerelease_args[@]}"
           fi
+
+  publish-docs:
+    name: Publish release documentation
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
+    concurrency:
+      group: github-pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    env:
+      RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || github.event.inputs.tag }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+          fetch-depth: 0
+
+      - name: Resolve documentation version
+        run: |
+          echo "HELIX_DOCS_VERSION=${RELEASE_TAG}" >> "${GITHUB_ENV}"
+          echo "HELIX_DOCS_VERSION_LABEL=${RELEASE_TAG}" >> "${GITHUB_ENV}"
+          echo "Resolved documentation version: ${RELEASE_TAG}"
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install Python documentation dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[docs]"
+
+      - name: Install Doxygen
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends doxygen
+
+      - name: Build HTML with warnings as errors
+        run: make -C doc html SPHINXOPTS="-W --keep-going"
+
+      - name: Prepare gh-pages storage
+        run: |
+          site_dir="${RUNNER_TEMP}/helix-pages-site"
+          rm -rf "${site_dir}"
+          if git ls-remote --exit-code --heads origin gh-pages >/dev/null 2>&1; then
+            git fetch --depth=1 origin gh-pages
+            git worktree add --detach "${site_dir}" origin/gh-pages
+          else
+            git worktree add --orphan gh-pages "${site_dir}"
+          fi
+          echo "HELIX_PAGES_SITE=${site_dir}" >> "${GITHUB_ENV}"
+
+      - name: Stage release documentation
+        run: |
+          python scripts/stage_docs_site.py \
+            --site-dir "${HELIX_PAGES_SITE}" \
+            --docs-dir doc/build/html \
+            --version "${RELEASE_TAG}"
+
+      - name: Persist gh-pages storage
+        run: |
+          git -C "${HELIX_PAGES_SITE}" config user.name "github-actions[bot]"
+          git -C "${HELIX_PAGES_SITE}" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C "${HELIX_PAGES_SITE}" add -A
+          if git -C "${HELIX_PAGES_SITE}" diff --cached --quiet; then
+            echo "No documentation changes to persist."
+          else
+            git -C "${HELIX_PAGES_SITE}" commit -m "docs: publish ${RELEASE_TAG} documentation"
+            git -C "${HELIX_PAGES_SITE}" push origin HEAD:gh-pages
+          fi
+
+      - name: Prepare Pages artifact payload
+        run: |
+          pages_artifact="${RUNNER_TEMP}/helix-pages-artifact"
+          rm -rf "${pages_artifact}"
+          mkdir -p "${pages_artifact}"
+          cp -a "${HELIX_PAGES_SITE}/." "${pages_artifact}/"
+          rm -rf "${pages_artifact}/.git"
+          echo "HELIX_PAGES_ARTIFACT=${pages_artifact}" >> "${GITHUB_ENV}"
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload GitHub Pages artifact
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: ${{ env.HELIX_PAGES_ARTIFACT }}
+          include-hidden-files: true
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5

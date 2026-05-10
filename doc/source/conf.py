@@ -35,6 +35,7 @@ def _get_doc_version() -> str:
 
 
 version = _get_doc_version()
+html_version_label = os.environ.get("HELIX_DOCS_VERSION_LABEL", "").strip() or f"v{version}"
 project = "HELIX"
 author = "Ye Jun"
 copyright = "2026, Ye Jun"
@@ -67,11 +68,17 @@ exclude_patterns = [
 ]
 
 html_theme = "furo"
-html_title = f"HELIX · v{version}"
+html_title = f"HELIX · {html_version_label}"
 html_logo = "_static/logo.png"
 html_static_path = ["_static"]
 html_extra_path = [".nojekyll"]
 html_show_sourcelink = False
+html_context = {
+    "helix_docs_version_label": html_version_label,
+}
+html_js_files = [
+    "js/version-switcher.js",
+]
 
 autosectionlabel_prefix_document = True
 copybutton_prompt_text = r"^\$ "

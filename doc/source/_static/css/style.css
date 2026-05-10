@@ -165,6 +165,45 @@ table tr:hover {
     margin: 2em 0;
 }
 
+.helix-version-switcher {
+    margin: 0.75rem 1rem 1rem;
+}
+
+.helix-version-switcher__label {
+    display: block;
+    margin-bottom: 0.25rem;
+    color: var(--color-sidebar-caption-text, #5c6773);
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.helix-version-switcher__select {
+    width: 100%;
+    min-height: 2rem;
+    border: 1px solid var(--color-sidebar-search-border, #d8dee4);
+    border-radius: 4px;
+    background: var(--color-sidebar-background, #fff);
+    color: var(--color-sidebar-link-text, #24292f);
+    font: inherit;
+    font-size: 0.875rem;
+    padding: 0.25rem 0.5rem;
+}
+
+.helix-version-switcher__quick-link {
+    display: block;
+    margin-top: 0.45rem;
+    color: var(--color-sidebar-link-text, #24292f);
+    font-size: 0.8125rem;
+    line-height: 1.35;
+    text-decoration: none;
+}
+
+.helix-version-switcher__quick-link:hover {
+    color: var(--color-link, var(--helix-primary));
+    text-decoration: underline;
+}
+
 @media (prefers-color-scheme: dark) {
     pre,
     .highlight pre {
