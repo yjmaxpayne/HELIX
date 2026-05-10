@@ -67,6 +67,38 @@ jobs:
             exit 1
           fi
 
+      - name: Check runner context scope
+        run: |
+          invalid_runner_context="$(
+            awk '
+              /^[^[:space:]]/ {
+                top = $1
+                sub(":", "", top)
+                in_jobs = (top == "jobs")
+                in_job_env = 0
+                next
+              }
+              in_jobs && /^[[:space:]]{2}[A-Za-z0-9_-]+:/ {
+                in_job_env = 0
+                next
+              }
+              in_jobs && /^[[:space:]]{4}env:/ {
+                in_job_env = 1
+                next
+              }
+              in_jobs && /^[[:space:]]{4}[A-Za-z0-9_-]+:/ {
+                in_job_env = 0
+              }
+              in_job_env && /\$\{\{[[:space:]]*runner\./ {
+                print FILENAME ":" FNR ": runner context is not available in jobs.<job_id>.env; move this value to steps.env or write it via GITHUB_ENV"
+              }
+            ' .github/workflows/*.yml
+          )"
+          if [[ -n "${invalid_runner_context}" ]]; then
+            echo "${invalid_runner_context}" >&2
+            exit 1
+          fi
+
       - name: Check GitHub Pages source contract
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:

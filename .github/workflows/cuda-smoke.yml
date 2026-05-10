@@ -37,8 +37,6 @@ jobs:
     env:
       HELIX_STEPS: ${{ github.event.inputs.helix_steps || '2' }}
       HELIX_CUDA_ARCHITECTURES: ${{ github.event.inputs.cuda_architectures || '89' }}
-      HELIX_BUILD_DIR: ${{ runner.temp }}/helix-build
-      HELIX_RUN_DIR: ${{ runner.temp }}/helix-run
     steps:
       - name: Check out
         uses: actions/checkout@v6
@@ -48,6 +46,13 @@ jobs:
           nvidia-smi
           nvcc --version
           cmake --version
+
+      - name: Set smoke runtime paths
+        run: |
+          {
+            echo "HELIX_BUILD_DIR=${RUNNER_TEMP}/helix-build"
+            echo "HELIX_RUN_DIR=${RUNNER_TEMP}/helix-run"
+          } >> "${GITHUB_ENV}"
 
       - name: Configure
         run: cmake -S . -B "${HELIX_BUILD_DIR}" -DCMAKE_BUILD_TYPE=Release -DHELIX_CUDA_ARCHITECTURES="${HELIX_CUDA_ARCHITECTURES}"
@@ -90,8 +95,6 @@ jobs:
     timeout-minutes: 30
     env:
       HELIX_CUDA_ARCHITECTURES: ${{ github.event.inputs.cuda_architectures || '89' }}
-      HELIX_BUILD_DIR: ${{ runner.temp }}/helix-sanitizer-build
-      HELIX_SANITIZER_REPORT_DIR: ${{ runner.temp }}/helix-sanitizer-reports
     steps:
       - name: Check out
         uses: actions/checkout@v6
@@ -102,6 +105,13 @@ jobs:
           nvcc --version
           compute-sanitizer --version
           cmake --version
+
+      - name: Set sanitizer runtime paths
+        run: |
+          {
+            echo "HELIX_BUILD_DIR=${RUNNER_TEMP}/helix-sanitizer-build"
+            echo "HELIX_SANITIZER_REPORT_DIR=${RUNNER_TEMP}/helix-sanitizer-reports"
+          } >> "${GITHUB_ENV}"
 
       - name: Configure
         run: cmake -S . -B "${HELIX_BUILD_DIR}" -DCMAKE_BUILD_TYPE=Release -DHELIX_CUDA_ARCHITECTURES="${HELIX_CUDA_ARCHITECTURES}"
