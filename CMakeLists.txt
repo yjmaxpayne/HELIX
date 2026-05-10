@@ -44,6 +44,7 @@ set_target_properties(helix_host_core PROPERTIES
 
 add_library(helix_core STATIC
     src/helix.cpp
+    src/library/energy_observable.cpp
     src/library/legacy_runtime_session.cu
     src/library/result_extractor.cu
     src/parameters.cu
@@ -80,6 +81,7 @@ set_target_properties(helix_core PROPERTIES
 )
 
 add_executable(helix
+    src/cli_compatibility.cu
     src/main.cu
 )
 
@@ -418,6 +420,60 @@ if(HELIX_BUILD_TESTS)
         LABELS numerical integration
         GPU
         TIMEOUT 180
+    )
+
+    add_executable(cli_compatibility_tests
+        tests/unit/cli_compatibility_tests.cpp
+    )
+
+    target_link_libraries(cli_compatibility_tests PRIVATE
+        helix_test_support
+    )
+
+    target_include_directories(cli_compatibility_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+
+    helix_add_test(
+        NAME cli_compatibility_tests
+        TARGET cli_compatibility_tests
+        LABELS unit
+        TIMEOUT 10
+    )
+
+    add_executable(energy_observable_tests
+        tests/unit/energy_observable_tests.cpp
+        src/library/energy_observable.cpp
+    )
+
+    target_link_libraries(energy_observable_tests PRIVATE
+        helix_test_support
+    )
+
+    target_include_directories(energy_observable_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+
+    helix_add_test(
+        NAME energy_observable_tests
+        TARGET energy_observable_tests
+        LABELS unit
+        TIMEOUT 10
+    )
+
+    helix_add_test(
+        NAME v01_cli_compatibility_wrapper_gate
+        COMMAND
+            ${CMAKE_COMMAND}
+            -DHELIX_EXECUTABLE=$<TARGET_FILE:helix>
+            -DHELIX_VERSION_STRING=${HELIX_VERSION_STRING}
+            -DHELIX_ENERGY_COMPARE=$<TARGET_FILE:energy_trace_compare>
+            -DHELIX_REFERENCE_ENERGY=${CMAKE_CURRENT_SOURCE_DIR}/examples/outputEnergy.txt
+            -DHELIX_CLI_ROOT=${CMAKE_CURRENT_BINARY_DIR}/cli-compatibility-wrapper
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/cli_compatibility_wrapper.cmake
+        LABELS integration baseline
+        GPU
+        TIMEOUT 300
     )
 
     helix_add_v01_expected_fail_gate(

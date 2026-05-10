@@ -57,7 +57,7 @@ template: |
   ## Release Gate
 
   - CUDA release build passed.
-  - Full numerical baseline passed with `HELIX_STEPS=1980`.
+  - Full numerical baseline passed with `HELIX_STEPS=1000`.
   - Release package includes SHA-256 checksum and provenance manifest.
 
   **Full Changelog**: https://github.com/$OWNER/$REPOSITORY/compare/$PREVIOUS_TAG...v$RESOLVED_VERSION

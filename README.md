@@ -45,6 +45,10 @@ cmake --build build/cmake --parallel "$(nproc)"
 
 The executable is `build/cmake/helix`.
 
+## CLI compatibility
+
+The `helix` executable is kept as a compatibility wrapper around the legacy GPU-HEOM run path. It supports `--version` and `-V`, reads `HELIX_STEPS` with `HEOM_STEPS` as a compatibility alias, and continues to write the legacy output files in the current working directory. Library runs return structured results instead of writing these files.
+
 ## Run the example baseline
 
 `helix` writes output files in the current directory. Use a scratch directory so generated files do not land next to the sources:
