@@ -43,22 +43,22 @@ ctest --test-dir build/cmake -L sanitizer --output-on-failure
 
 | Label / gate | Environment | Expected local time | Failure meaning | Gate |
 | --- | --- | --- | --- | --- |
-| `unit` | CUDA toolkit available; no GPU device required | <1s for current unit gates | host helper, PSD reference, parameter default, public API, or comparator regression | PR CUDA smoke and local pre-commit |
-| `cuda` | single NVIDIA GPU | ~3s for current cuda-labelled gates on RTX 4070 class hardware | CUDA micro, numerical GPU, integration smoke, or planned v0.1 GPU gate regression | PR CUDA smoke on self-hosted GPU runner |
-| `numerical` | single NVIDIA GPU | ~2s for current numerical gates | sparse dRho, one-step invariant, lifecycle repeatability, or planned public numerical gate drift beyond documented tolerance | GPU PR or pre-merge gate |
-| `integration` | single NVIDIA GPU | ~2s for current integration gates | legacy CLI output contract, isolated run directory, external consumer, or planned integration gate failure | PR CUDA smoke on self-hosted GPU runner |
-| `baseline` | single NVIDIA GPU | ~2s for CTest smoke; ~2min for `HELIX_STEPS=1980 scripts/verify_examples.sh` | checked-in energy fixture mismatch or full trajectory drift | CTest smoke in PR; full baseline in nightly/manual/release gates |
-| `sanitizer` | single NVIDIA GPU with `compute-sanitizer` | usually <1min for the micro target | CUDA memory error, sanitizer tool failure, or report artifact failure | manual workflow dispatch or pre-merge gate |
+| `unit` | CUDA toolkit available; no GPU device required | <1s for current unit gates | host helper, PSD reference, parameter default, public API, or comparator regression | CUDA CI and local pre-commit |
+| `cuda` | single NVIDIA GPU | ~3s for current cuda-labelled gates on RTX 4070 class hardware | CUDA micro, numerical GPU, integration smoke, or planned v0.1 GPU gate regression | CUDA CI on self-hosted GPU runner |
+| `numerical` | single NVIDIA GPU | ~2s for current numerical gates | sparse dRho, one-step invariant, lifecycle repeatability, or planned public numerical gate drift beyond documented tolerance | CUDA CI on self-hosted GPU runner |
+| `integration` | single NVIDIA GPU | ~2s for current integration gates | legacy CLI output contract, isolated run directory, external consumer, or planned integration gate failure | CUDA CI on self-hosted GPU runner |
+| `baseline` | single NVIDIA GPU | ~2s for CTest smoke; ~2min for `HELIX_STEPS=1980 scripts/verify_examples.sh` | checked-in energy fixture mismatch or full trajectory drift | CTest in CUDA CI; full baseline in scheduled/manual/release gates |
+| `sanitizer` | single NVIDIA GPU with `compute-sanitizer` | usually <1min for the micro target | CUDA memory error, sanitizer tool failure, or report artifact failure | manual workflow dispatch only |
 | `benchmark` | pinned GPU host | non-blocking | performance trend shift, not correctness failure | manual only |
 
 CI alignment:
 
 | Workflow | Trigger | Local equivalent | Artifact contract |
 | --- | --- | --- | --- |
-| `CUDA Smoke` | pull request, push to `main`, manual dispatch | configure, build, `ctest -L unit`, `ctest -L cuda`, `ctest -L integration`, `HELIX_STEPS=2 scripts/verify_examples.sh` | smoke run outputs, CTest logs, compare summary |
-| `CUDA Smoke` sanitizer job | manual dispatch with `run_sanitizer=true` | `ctest --test-dir build/cmake -L sanitizer --output-on-failure` | sanitizer stdout/stderr/summary/log files |
+| `CUDA CI` | pull request, push, manual dispatch | configure, build, `ctest --test-dir build/cmake --output-on-failure -LE "^(sanitizer\|benchmark)$"`, `HELIX_STEPS=2 scripts/verify_examples.sh` | CTest logs, compatibility smoke outputs, compare summary |
+| `CUDA CI` sanitizer job | manual dispatch with `run_sanitizer=true` | `ctest --test-dir build/cmake -L sanitizer --output-on-failure` | sanitizer stdout/stderr/summary/log files |
 | `Numerical Baseline` | weekly schedule and manual dispatch | `HELIX_STEPS=1980 scripts/verify_examples.sh` | full baseline outputs and `energy_compare_summary.txt` |
-| `Repository Health` | pull request and push to `main` | metadata checks, `bash -n` shell checks, generated-artifact tracking check | no generated HELIX outputs tracked except `examples/outputEnergy.txt` |
+| `Repository Health` | pull request and push | metadata checks, `bash -n` shell checks, generated-artifact tracking check | no generated HELIX outputs tracked except `examples/outputEnergy.txt` |
 | `Release` | SemVer tag or manual dispatch | full baseline plus package script | release package, checksum, release verification outputs |
 
 ## Sanitizer And CI Resource Governance

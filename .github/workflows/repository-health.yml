@@ -136,6 +136,20 @@ jobs:
             fi
           done
 
+      - name: Check CUDA CI CTest coverage
+        run: |
+          workflow=.github/workflows/cuda-smoke.yml
+          required_ctest='ctest --test-dir "${HELIX_BUILD_DIR}" --output-on-failure -LE "^(sanitizer|benchmark)$"'
+          if ! grep -Fq "${required_ctest}" "${workflow}"; then
+            echo "CUDA CI must run the ordinary CTest suite and exclude only sanitizer/benchmark labels." >&2
+            echo "Expected command: ${required_ctest}" >&2
+            exit 1
+          fi
+          if grep -Eq 'ctest --test-dir "\$\{HELIX_BUILD_DIR\}" -L (unit|cuda|integration)([[:space:]]|$)' "${workflow}"; then
+            echo "CUDA CI must not fall back to smoke-only unit/cuda/integration label selection." >&2
+            exit 1
+          fi
+
       - name: Check GitHub Pages source contract
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:

@@ -1,4 +1,4 @@
-name: CUDA Smoke
+name: CUDA CI
 
 on:
   pull_request:
@@ -25,12 +25,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: cuda-smoke-${{ github.ref }}
+  group: cuda-ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  cuda-smoke:
-    name: Build and smoke on CUDA runner
+  cuda-ci:
+    name: Build and test on CUDA runner
     runs-on: self-hosted
     timeout-minutes: 20
     env:
@@ -46,7 +46,7 @@ jobs:
           nvcc --version
           cmake --version
 
-      - name: Set smoke runtime paths
+      - name: Set CUDA CI runtime paths
         run: |
           {
             echo "HELIX_BUILD_DIR=${RUNNER_TEMP}/helix-build"
@@ -59,23 +59,17 @@ jobs:
       - name: Build
         run: cmake --build "${HELIX_BUILD_DIR}" --parallel "$(nproc)"
 
-      - name: Run unit CTest label
-        run: ctest --test-dir "${HELIX_BUILD_DIR}" -L unit --output-on-failure
-
-      - name: Run CUDA CTest label
-        run: ctest --test-dir "${HELIX_BUILD_DIR}" -L cuda --output-on-failure
-
-      - name: Run integration CTest label
-        run: ctest --test-dir "${HELIX_BUILD_DIR}" -L integration --output-on-failure
+      - name: Run ordinary CTest suite
+        run: ctest --test-dir "${HELIX_BUILD_DIR}" --output-on-failure -LE "^(sanitizer|benchmark)$"
 
       - name: Verify script compatibility smoke
         run: scripts/verify_examples.sh
 
-      - name: Upload smoke outputs
+      - name: Upload CUDA CI outputs
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: cuda-smoke-output
+          name: cuda-ci-output
           path: |
             ${{ runner.temp }}/helix-run/output*.txt
             ${{ runner.temp }}/helix-run/snapshot_rho*.dat
