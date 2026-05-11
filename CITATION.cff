@@ -18,9 +18,9 @@ keywords:
   - CUDA
   - GPU computing
   - quantum dissipation
-# After the first Zenodo archive is created (see CONTRIBUTING.md > Releases and
-# Zenodo DOI), fill in the concept DOI on the next line and drop this comment:
-# doi: "10.5281/zenodo.XXXXXXX"
+# Concept DOI: resolves to the latest archived release on Zenodo.
+# Per-version DOIs are listed on the Zenodo record page.
+doi: "10.5281/zenodo.20115002"
 references:
   - type: article
     authors:

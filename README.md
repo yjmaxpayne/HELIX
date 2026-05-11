@@ -13,10 +13,7 @@
   <img src="https://img.shields.io/badge/HEOM-GPU--Accelerated-6A5ACD.svg" alt="GPU-accelerated HEOM">
   <img src="https://img.shields.io/badge/NVIDIA-GPU%20Required-76B900.svg?logo=nvidia&logoColor=white" alt="NVIDIA GPU required">
   <img src="https://img.shields.io/badge/cuBLAS%20%2F%20cuSPARSE-Required-76B900.svg?logo=nvidia&logoColor=white" alt="cuBLAS/cuSPARSE required">
-  <!-- After the first Zenodo archive, replace the line below with:
-       <a href="https://doi.org/10.5281/zenodo.XXXXXXX"><img src="https://zenodo.org/badge/DOI/10.5281/zenodo.XXXXXXX.svg" alt="DOI"></a>
-       (use the *concept* DOI, not a version-specific one). -->
-  <img src="https://img.shields.io/badge/DOI-pending%20first%20Zenodo%20archive-lightgrey.svg" alt="DOI: pending first Zenodo archive">
+  <a href="https://doi.org/10.5281/zenodo.20115002"><img src="https://zenodo.org/badge/DOI/10.5281/zenodo.20115002.svg" alt="DOI"></a>
 </p>
 
 HELIX (HEOM Library for Integrated eXecution) is a C++17/CUDA implementation of the hierarchical equations of motion (HEOM) for GPU-accelerated simulations of non-Markovian open quantum systems. The repository contains the validated legacy CUDA executable path and a public C++ API that wraps the same solver path.
@@ -220,10 +217,9 @@ Ye Jun <yjmaxpayne@hotmail.com> maintains HELIX and handled the Linux/CMake/CUDA
 
 Machine-readable metadata for HELIX lives in [`CITATION.cff`](CITATION.cff) (GitHub
 "Cite this repository" button, Zotero, Mendeley) and [`.zenodo.json`](.zenodo.json)
-(Zenodo software archive). Each tagged release is archived on Zenodo and receives
-both a version DOI and a concept DOI that always resolves to the latest version.
-Until the first Zenodo archive is created, cite the repository URL plus the
-methodological reference below; see
+(Zenodo software archive). The concept DOI [10.5281/zenodo.20115002](https://doi.org/10.5281/zenodo.20115002)
+always resolves to the latest archived release; per-version DOIs are listed on the
+Zenodo record page. See
 [CONTRIBUTING.md](CONTRIBUTING.md#releases-and-zenodo-doi) for the release flow.
 
 ```bibtex
@@ -232,7 +228,8 @@ methodological reference below; see
   author = {Ye, Jun},
   year   = {2026},
   url    = {https://github.com/yjmaxpayne/HELIX},
-  note   = {ORCID: 0000-0003-1963-0865. DOI: pending first Zenodo archive.}
+  doi    = {10.5281/zenodo.20115002},
+  note   = {ORCID: 0000-0003-1963-0865}
 }
 
 @article{tsuchimoto2015heom,
@@ -247,9 +244,8 @@ methodological reference below; see
 }
 ```
 
-After the first Zenodo archive is created, replace the `note = {... DOI: pending ...}` line
-above with `doi = {10.5281/zenodo.XXXXXXX}` (the concept DOI), and uncomment the
-matching Zenodo badge in the header of this file.
+To cite a specific version, replace the concept DOI above with the version DOI
+from the Zenodo record page (e.g. `10.5281/zenodo.20115003` for v0.0.2).
 
 ## License
 
