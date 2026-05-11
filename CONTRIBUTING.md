@@ -67,3 +67,42 @@ Historical reference files under `examples/` are intentionally tracked.
 ## Dependencies
 
 Avoid adding new dependencies unless they are required for build, verification, or reproducibility. Document any new dependency in `README.md`.
+
+## Releases and Zenodo DOI
+
+Citation metadata is split across two files: `CITATION.cff` (GitHub native, human and tool
+facing) and `.zenodo.json` (consumed by Zenodo when a GitHub Release is published). Both
+must be kept in sync on every release.
+
+One-time setup (account owner only):
+
+1. Sign in to <https://zenodo.org/account/settings/github/> with the same GitHub account that
+   owns the repository and flip the toggle next to `yjmaxpayne/HELIX` to **On**.
+2. Confirm the webhook appears under the repository's `Settings → Webhooks` page on GitHub.
+
+Per release:
+
+1. Bump the version with Conventional Commit history and tag it. The Git tag is the version
+   authority (`tool.helix.version.authority` in `pyproject.toml`):
+
+   ```bash
+   git tag -a vMAJOR.MINOR.PATCH -m "Release vMAJOR.MINOR.PATCH"
+   git push origin vMAJOR.MINOR.PATCH
+   ```
+
+2. Pushing the tag triggers the `Release` workflow (`.github/workflows/release.yml`), which
+   builds the CUDA package and creates a GitHub Release. Publishing that Release fires the
+   Zenodo webhook, which reads `.zenodo.json` and archives the tagged source tree.
+3. After Zenodo finishes, copy the **concept DOI** (the one that always resolves to the
+   latest version, shown on the Zenodo record page under "Cite all versions") and:
+   - uncomment the `doi:` line in `CITATION.cff`;
+   - uncomment the Zenodo badge `<a>` in `README.md` and remove the `DOI: pending`
+     placeholder badge;
+   - replace the `note = {... DOI: pending ...}` line in the README BibTeX block with
+     `doi = {10.5281/zenodo.XXXXXXX}`.
+4. Commit those three edits with a `docs: backfill Zenodo DOI for vX.Y.Z` message.
+
+The version DOI (one per release) is also returned by Zenodo. Prefer the **concept DOI** for
+the badge and `CITATION.cff` so that the canonical citation always points to "this software,
+any version". Cite the version DOI only when reproducibility requires pinning to a specific
+release.

@@ -1,0 +1,38 @@
+cff-version: 1.2.0
+message: "If you use HELIX in your research, please cite the software as below."
+title: "HELIX: HEOM Library for Integrated eXecution"
+type: software
+authors:
+  - family-names: Ye
+    given-names: Jun
+    orcid: "https://orcid.org/0000-0003-1963-0865"
+    email: yjmaxpayne@hotmail.com
+repository-code: "https://github.com/yjmaxpayne/HELIX"
+url: "https://github.com/yjmaxpayne/HELIX"
+license: MIT
+keywords:
+  - HEOM
+  - hierarchical equations of motion
+  - open quantum systems
+  - non-Markovian dynamics
+  - CUDA
+  - GPU computing
+  - quantum dissipation
+# After the first Zenodo archive is created (see CONTRIBUTING.md > Releases and
+# Zenodo DOI), fill in the concept DOI on the next line and drop this comment:
+# doi: "10.5281/zenodo.XXXXXXX"
+references:
+  - type: article
+    authors:
+      - family-names: Tsuchimoto
+        given-names: Masashi
+      - family-names: Tanimura
+        given-names: Yoshitaka
+    title: "Spins Dynamics in a Dissipative Environment: Hierarchal Equations of Motion Approach Using a Graphics Processing Unit (GPU)"
+    journal: "Journal of Chemical Theory and Computation"
+    year: 2015
+    volume: 11
+    issue: 8
+    start: 3859
+    end: 3865
+    doi: "10.1021/acs.jctc.5b00488"

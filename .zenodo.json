@@ -1,0 +1,40 @@
+{
+  "title": "HELIX: HEOM Library for Integrated eXecution",
+  "description": "<p>HELIX (HEOM Library for Integrated eXecution) is a C++17 / CUDA implementation of the hierarchical equations of motion (HEOM) for GPU-accelerated simulations of non-Markovian open quantum systems. It exposes the validated legacy spin-glass CUDA path through a public C++ API and ships with a numerical baseline that protects the physical observables across refactors. HELIX targets cuBLAS / cuSPARSE on modern NVIDIA GPUs and is being prepared as an embeddable HEOM backend for higher-level quantum simulation stacks.</p>",
+  "upload_type": "software",
+  "access_right": "open",
+  "license": "MIT",
+  "creators": [
+    {
+      "name": "Ye, Jun",
+      "orcid": "0000-0003-1963-0865"
+    }
+  ],
+  "keywords": [
+    "HEOM",
+    "hierarchical equations of motion",
+    "open quantum systems",
+    "non-Markovian dynamics",
+    "quantum dissipation",
+    "CUDA",
+    "GPU computing",
+    "cuBLAS",
+    "cuSPARSE",
+    "scientific software",
+    "C++17"
+  ],
+  "related_identifiers": [
+    {
+      "identifier": "10.1021/acs.jctc.5b00488",
+      "relation": "isDerivedFrom",
+      "resource_type": "publication-article",
+      "scheme": "doi"
+    },
+    {
+      "identifier": "https://github.com/yjmaxpayne/HELIX",
+      "relation": "isSupplementTo",
+      "resource_type": "software",
+      "scheme": "url"
+    }
+  ]
+}
