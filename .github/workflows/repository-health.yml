@@ -164,10 +164,10 @@ jobs:
       - name: Check generated artifacts are not tracked
         run: |
           tracked_generated="$(git ls-files \
-            | grep -E '(^build/|^doc/build/|^doc/_doxygen/|(^|/)(output\.txt|outputEnergy\.txt|output_rho[0-9]+\.txt|snapshot_rho[0-9]+\.dat)$)' \
+            | grep -E '(^build/|^doc/build/|^doc/_doxygen/|(^|/)(output\.txt|outputEnergy\.txt|output_rho[0-9]+\.txt|snapshot_rho[0-9]+\.dat)$|(^|/)nsight/|(\.nsys-rep|\.ncu-rep|\.qdrep|\.qdstrm|\.sqlite(-shm|-wal)?)$)' \
             | grep -v '^examples/outputEnergy\.txt$' || true)"
           if [[ -n "${tracked_generated}" ]]; then
             echo "${tracked_generated}"
-            echo "Generated HELIX run artifacts must not be tracked." >&2
+            echo "Generated HELIX run artifacts and profiler captures must not be tracked." >&2
             exit 1
           fi

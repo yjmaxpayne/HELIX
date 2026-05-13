@@ -72,8 +72,8 @@ repos:
         types: [shell]
 
       - id: helix-generated-output-guard
-        name: forbid generated HELIX run outputs
+        name: forbid generated HELIX outputs and profiler captures
         entry: scripts/check_no_generated_outputs.sh
         language: script
-        files: (^|/)(output\.txt|outputEnergy\.txt|output_rho[0-9]+\.txt|snapshot_rho[0-9]+\.dat)$
+        files: (^|/)(output\.txt|outputEnergy\.txt|output_rho[0-9]+\.txt|snapshot_rho[0-9]+\.dat|nsight/.*|.*\.(nsys-rep|ncu-rep|qdrep|qdstrm)|.*\.sqlite(-shm|-wal)?)$
         exclude: ^examples/outputEnergy\.txt$

@@ -85,9 +85,10 @@ HELIX_BENCHMARK_WITH_NSIGHT=systems examples/benchmark/legacy_spin_glass/run.sh
 ```
 
 The checked-in sample output lives in `examples/benchmark/legacy_spin_glass/reference/` and includes
-the JSONL, Markdown summary, a small Nsight Systems `.nsys-rep` capture, and `test_results/` evidence
-for the ordinary correctness, benchmark, quick/full baseline, Python-smoke status, and Nsight tool
-checks from the same validation session.
+the JSONL, Markdown summary, and `test_results/` evidence for the ordinary correctness, benchmark,
+quick/full baseline, Python-smoke status, and Nsight tool checks from the same validation session.
+Raw Nsight Systems / Nsight Compute reports are not checked in because they can embed environment
+variables, credentials, and local paths.
 
 Benchmark CTest entries use `RESOURCE_LOCK gpu` when registered with `helix_add_test(... GPU ...)`,
 but they do not receive the `cuda` label. `cuda` remains the ordinary correctness selector; benchmark
@@ -95,7 +96,8 @@ data is opt-in development/reporting evidence and is not a speed-threshold gate 
 
 Manual Nsight capture is optional and requires local NVIDIA Nsight Systems / Nsight Compute tools.
 It is not an ordinary CI dependency, and capture failure does not fail ordinary correctness CI. Run
-the default benchmark executable directly and write reports under the benchmark artifact root:
+the default benchmark executable directly and write reports under the benchmark artifact root. Start
+captures from an environment without API keys, tokens, secrets, passwords, or credential paths:
 
 ```sh
 cmake --build build/cmake --target legacy_spin_glass_benchmark --parallel "$(nproc)"
@@ -127,15 +129,17 @@ these names and evidence mappings: `helix.develop` for H-003, `helix.getdRhoSpar
 
 When the example script runs with `HELIX_BENCHMARK_WITH_NSIGHT=systems`, it sets
 `HELIX_BENCHMARK_NSIGHT_ARTIFACT=nsight/<run_id>-systems.nsys-rep` so the JSONL and Markdown summary
-record the expected Nsight report path.
+record the expected Nsight report path. The wrapper removes environment variables whose names contain
+`KEY`, `TOKEN`, `SECRET`, `PASSWORD`, or `CREDENTIAL` before launching Nsight.
 When correctness or baseline gates are run separately in the same validation session, set
 `HELIX_BENCHMARK_CORRECTNESS_GATE_STATUS=passed|failed` and
 `HELIX_BENCHMARK_BASELINE_GATE_STATUS=passed|failed` before invoking the benchmark. Standalone
 benchmark runs must leave those fields at the default `not_run`.
 
 No Nsight workflow runs on the default pull-request path. A future workflow must use
-`workflow_dispatch` or a scheduled trigger and upload only the benchmark artifact root, not baseline
-outputs.
+`workflow_dispatch` or a scheduled trigger. Raw profiler reports must not be committed; if a workflow
+uploads them for internal review, keep them in an access-controlled benchmark artifact root rather
+than baseline output paths.
 
 `helix_benchmark.jsonl` uses the internal `helix.benchmark.v1` schema. Each line is one run record
 with these top-level fields:

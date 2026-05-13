@@ -43,8 +43,9 @@ The same benchmark can be run through a repository example:
 The example writes artifacts to
 ``build/cmake/example-benchmark/legacy_spin_glass/`` by default. A checked-in
 sample result lives in ``examples/benchmark/legacy_spin_glass/reference/`` and
-includes ``helix_benchmark.jsonl``, ``helix_benchmark_summary.md``, and one
-small Nsight Systems report from a local capture. Its ``test_results/``
+includes ``helix_benchmark.jsonl`` and ``helix_benchmark_summary.md``. Raw
+Nsight reports are intentionally excluded because profiler captures can embed
+environment variables, credentials, and local paths. Its ``test_results/``
 subdirectory records the ordinary correctness, explicit benchmark, quick/full
 baseline, Python-smoke status, and Nsight tool checks from the same validation
 session. Treat those files as format examples; timing values are
@@ -66,7 +67,9 @@ Build the default benchmark executable before capture:
    cmake --build build/cmake --target legacy_spin_glass_benchmark --parallel "$(nproc)"
 
 Use the benchmark artifact root and write reports under its ``nsight/``
-subdirectory:
+subdirectory. Start manual captures from an environment without API keys,
+tokens, secrets, passwords, or credential paths because Nsight reports may
+record the profiled process environment:
 
 .. code-block:: bash
 
@@ -93,7 +96,9 @@ field ``profiling.nsight_artifact`` is ``null`` when no capture is collected;
 the generated Markdown summary renders the same state as ``not_collected``.
 When using the example wrapper, set ``HELIX_BENCHMARK_WITH_NSIGHT=systems``;
 the wrapper sets ``HELIX_BENCHMARK_NSIGHT_ARTIFACT`` so the generated JSONL and
-summary record ``nsight/<run_id>-systems.nsys-rep``.
+summary record ``nsight/<run_id>-systems.nsys-rep``. The wrapper removes
+environment variables whose names contain ``KEY``, ``TOKEN``, ``SECRET``,
+``PASSWORD``, or ``CREDENTIAL`` before launching Nsight.
 If correctness or baseline gates were run separately in the same validation
 session, set ``HELIX_BENCHMARK_CORRECTNESS_GATE_STATUS=passed|failed`` and
 ``HELIX_BENCHMARK_BASELINE_GATE_STATUS=passed|failed`` before invoking the
@@ -132,8 +137,9 @@ parallel naming scheme:
 
 Manual or scheduled Nsight workflows must use ``workflow_dispatch`` or a
 scheduled trigger only. They must not be added to the pull-request required
-path, and uploaded reports should stay under the benchmark artifact root rather
-than baseline output paths.
+path. Raw profiler reports must not be committed; if they are uploaded for
+internal review, keep them in an access-controlled benchmark artifact root
+rather than baseline output paths.
 
 CTest label boundary
 --------------------

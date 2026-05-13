@@ -36,7 +36,10 @@ HELIX_BENCHMARK_WITH_NSIGHT=systems \
 ```
 
 The Nsight run writes `nsight/<run_id>-systems.nsys-rep` under the artifact root
-and records that relative path in `profiling.nsight_artifact`.
+and records that relative path in `profiling.nsight_artifact`. The wrapper strips
+environment variables whose names look secret-like before launching Nsight, but
+raw profiler reports can still contain local process metadata and must not be
+committed.
 
 If correctness or baseline gates were run separately in the same validation
 session, record that context explicitly:
@@ -50,7 +53,9 @@ HELIX_BENCHMARK_WITH_NSIGHT=systems \
 
 The `reference/` directory contains one captured sample from the maintainer
 machine so users can inspect the JSONL and Markdown summary formats before
-running the benchmark locally. It also includes `test_results/` with the
+running the benchmark locally. Raw Nsight reports are intentionally excluded
+because profiler captures can embed environment variables and local paths. The
+directory includes `test_results/` with the
 ordinary correctness, explicit benchmark, quick baseline, full baseline,
 Python-smoke status, and Nsight-capture evidence that justify the sample's gate
 status fields. Timing values are machine-dependent.

@@ -8,7 +8,7 @@ This file is a release/PR handoff summary for benchmark trends. It is not a corr
 - Artifact root: `/home/yjmaxpayne/Dev/HELIX/examples/benchmark/legacy_spin_glass/reference`
 - JSONL: `/home/yjmaxpayne/Dev/HELIX/examples/benchmark/legacy_spin_glass/reference/helix_benchmark.jsonl`
 - Summary: `/home/yjmaxpayne/Dev/HELIX/examples/benchmark/legacy_spin_glass/reference/helix_benchmark_summary.md`
-- Nsight directory: `/home/yjmaxpayne/Dev/HELIX/examples/benchmark/legacy_spin_glass/reference/nsight`
+- Nsight directory: `not_retained`
 - Retention: benchmark artifacts are separate from ordinary CUDA correctness logs; manual or scheduled benchmark workflows should upload only this artifact root.
 
 ## Run metadata
@@ -79,10 +79,10 @@ This file is a release/PR handoff summary for benchmark trends. It is not a corr
 
 ## Profiling evidence
 
-- Instrumentation: `runner_wall_clock, cudaDeviceSynchronize_phase_boundaries, nsight_systems`
+- Instrumentation: `runner_wall_clock, cudaDeviceSynchronize_phase_boundaries`
 - NVTX enabled: `false`
-- Nsight artifact (`profiling.nsight_artifact`): `nsight/20260513T130852Z-legacy-spin-glass-systems.nsys-rep`
-- Nsight directory: `/home/yjmaxpayne/Dev/HELIX/examples/benchmark/legacy_spin_glass/reference/nsight`
+- Nsight artifact (`profiling.nsight_artifact`): `not_collected`
+- Nsight directory: `not_retained`
 
 | Hypothesis | Status | Fields | Method | Interpretation | Downstream action |
 | --- | --- | --- | --- | --- | --- |

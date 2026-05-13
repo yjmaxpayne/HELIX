@@ -8,6 +8,23 @@ BENCHMARK_EXE="${BUILD_DIR}/legacy_spin_glass_benchmark"
 WITH_NSIGHT="${HELIX_BENCHMARK_WITH_NSIGHT:-off}"
 SKIP_BUILD=0
 
+run_with_sanitized_profile_env()
+{
+	local env_args=()
+	local env_name
+
+	# Nsight reports record process environments, so strip common secret-like names.
+	while IFS='=' read -r env_name _; do
+		case "${env_name}" in
+			*KEY*|*TOKEN*|*SECRET*|*PASSWORD*|*CREDENTIAL*)
+				env_args+=("-u" "${env_name}")
+				;;
+		esac
+	done < <(env)
+
+	env "${env_args[@]}" "$@"
+}
+
 for arg in "$@"; do
 	case "${arg}" in
 		--no-build)
@@ -24,6 +41,9 @@ Environment:
   HELIX_BENCHMARK_CORRECTNESS_GATE_STATUS  not_run | passed | failed, default: not_run
   HELIX_BENCHMARK_BASELINE_GATE_STATUS     not_run | passed | failed, default: not_run
   HELIX_NSYS                      Optional path to nsys
+
+Nsight launches are sanitized by removing environment variables whose names
+contain KEY, TOKEN, SECRET, PASSWORD, or CREDENTIAL before profiling.
 USAGE
 			exit 0
 			;;
@@ -67,7 +87,7 @@ case "${WITH_NSIGHT}" in
 		report_base="${OUTPUT_DIR}/nsight/${run_id}-systems"
 		HELIX_BENCHMARK_OUTPUT_DIR="${OUTPUT_DIR}" \
 		HELIX_BENCHMARK_NSIGHT_ARTIFACT="nsight/${run_id}-systems.nsys-rep" \
-			"${NSYS}" profile \
+			run_with_sanitized_profile_env "${NSYS}" profile \
 				--force-overwrite true \
 				--trace=cuda,nvtx,osrt \
 				--output "${report_base}" \
