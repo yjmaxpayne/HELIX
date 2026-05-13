@@ -51,6 +51,7 @@ jobs:
           {
             echo "HELIX_BUILD_DIR=${RUNNER_TEMP}/helix-build"
             echo "HELIX_RUN_DIR=${RUNNER_TEMP}/helix-run"
+            echo "HELIX_BENCHMARK_OUTPUT_DIR=${RUNNER_TEMP}/helix-benchmark"
           } >> "${GITHUB_ENV}"
 
       - name: Configure

@@ -262,12 +262,13 @@ if(HELIX_BUILD_TESTS)
         set(test_labels ${HELIX_TEST_LABELS})
         if(HELIX_TEST_GPU)
             list(FIND test_labels sanitizer sanitizer_label_index)
+            list(FIND test_labels benchmark benchmark_label_index)
             list(FIND test_labels unit unit_label_index)
             if(NOT unit_label_index EQUAL -1)
                 message(FATAL_ERROR "GPU tests must not use the unit label")
             endif()
 
-            if(sanitizer_label_index EQUAL -1)
+            if(sanitizer_label_index EQUAL -1 AND benchmark_label_index EQUAL -1)
                 list(FIND test_labels cuda cuda_label_index)
                 if(cuda_label_index EQUAL -1)
                     list(APPEND test_labels cuda)
@@ -384,6 +385,86 @@ if(HELIX_BUILD_TESTS)
         TARGET api_schema_validation_tests
         LABELS unit
         TIMEOUT 10
+    )
+
+    add_executable(benchmark_schema_validation_tests
+        tests/unit/benchmark_schema_validation_tests.cpp
+    )
+
+    target_link_libraries(benchmark_schema_validation_tests PRIVATE
+        helix_core
+        helix_test_support
+    )
+
+    helix_add_test(
+        NAME benchmark_schema_validation_tests
+        TARGET benchmark_schema_validation_tests
+        LABELS unit
+        TIMEOUT 10
+    )
+
+    add_executable(benchmark_artifact_hygiene_tests
+        tests/unit/benchmark_artifact_hygiene_tests.cpp
+    )
+
+    target_link_libraries(benchmark_artifact_hygiene_tests PRIVATE
+        helix_test_support
+    )
+
+    helix_add_test(
+        NAME benchmark_artifact_hygiene_tests
+        TARGET benchmark_artifact_hygiene_tests
+        LABELS unit
+        TIMEOUT 10
+    )
+
+    set(HELIX_BENCHMARK_BUILD_TYPE "${CMAKE_BUILD_TYPE}")
+    if(NOT HELIX_BENCHMARK_BUILD_TYPE)
+        set(HELIX_BENCHMARK_BUILD_TYPE "unknown")
+    endif()
+
+    add_executable(legacy_spin_glass_benchmark
+        tests/benchmark/legacy_spin_glass_benchmark.cu
+    )
+
+    target_link_libraries(legacy_spin_glass_benchmark PRIVATE
+        helix_core
+        helix_test_support
+        CUDA::cudart
+    )
+
+    target_compile_definitions(legacy_spin_glass_benchmark PRIVATE
+        HELIX_BENCHMARK_BUILD_TYPE="${HELIX_BENCHMARK_BUILD_TYPE}"
+        HELIX_BENCHMARK_CUDA_ARCHITECTURES="${HELIX_CUDA_ARCHITECTURES}"
+        HELIX_BENCHMARK_COMPILER="${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}"
+        HELIX_BENCHMARK_DEFAULT_OUTPUT_DIR="${CMAKE_CURRENT_BINARY_DIR}/benchmark"
+    )
+
+    set_target_properties(legacy_spin_glass_benchmark PROPERTIES
+        CUDA_ARCHITECTURES "${HELIX_CUDA_ARCHITECTURES}"
+        CUDA_SEPARABLE_COMPILATION ON
+        CUDA_RESOLVE_DEVICE_SYMBOLS ON
+    )
+
+    helix_add_test(
+        NAME v003_legacy_spin_glass_benchmark_gate
+        TARGET legacy_spin_glass_benchmark
+        LABELS benchmark
+        GPU
+        TIMEOUT 180
+    )
+
+    helix_add_test(
+        NAME v003_ctest_label_resource_lock_review
+        COMMAND
+            ${CMAKE_COMMAND}
+            -DHELIX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
+            -DHELIX_BINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}
+            -DHELIX_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
+            -DHELIX_BENCHMARK_TEST_NAME=v003_legacy_spin_glass_benchmark_gate
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/ctest_label_resource_lock_review.cmake
+        LABELS integration
+        TIMEOUT 30
     )
 
     add_executable(public_lifecycle_context_tests

@@ -10,6 +10,7 @@ rules, and the documentation workflow.
    :caption: Contents:
 
    build-and-test
+   benchmarking
    documentation
 
 Overview
