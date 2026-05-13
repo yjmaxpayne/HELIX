@@ -24,6 +24,7 @@ The table below records what each named gate protects. New expected-fail gates m
 | `benchmark_schema_validation_tests` | `unit` | no | Internal `helix.benchmark.v1` sample records, JSONL emission, and schema validation stay stable. |
 | `benchmark_artifact_hygiene_tests` | `unit` | no | Benchmark artifact root resolution, legacy generated-output detection, and JSONL/summary containment are covered without a GPU. |
 | `v003_legacy_spin_glass_benchmark_gate` | `benchmark` | yes | Default legacy spin-glass benchmark writes `helix_benchmark.jsonl`, `helix_benchmark_summary.md`, and an `nsight/` artifact directory under the benchmark artifact root. |
+| `v003_legacy_spin_glass_benchmark_example_gate` | `benchmark` | yes | User-facing benchmark example script runs the same artifact path contract from `examples/benchmark/legacy_spin_glass/`. |
 | `v003_ctest_label_resource_lock_review` | `integration` | no | Generated CTest properties keep benchmark labels, GPU resource locking, ordinary CUDA labels, and the CI selector contract aligned. |
 | `v01_public_lifecycle_numerical_gate` | `numerical`, auto `cuda` | yes | Public create/run/destroy/recreate lifecycle is repeatable within numerical tolerance. |
 | `v01_public_solver_spin_glass_gate` | `numerical`, auto `cuda` | yes | Public `HEOMSolver` runs the legacy spin-glass compatibility adapter for a short GPU smoke and rejects arbitrary sparse execution. |
@@ -76,9 +77,65 @@ HELIX_BENCHMARK_OUTPUT_DIR="$(mktemp -d)" \
   ctest --test-dir build/cmake -L benchmark --output-on-failure
 ```
 
+The user-facing example wrapper is:
+
+```sh
+examples/benchmark/legacy_spin_glass/run.sh
+HELIX_BENCHMARK_WITH_NSIGHT=systems examples/benchmark/legacy_spin_glass/run.sh
+```
+
+The checked-in sample output lives in `examples/benchmark/legacy_spin_glass/reference/` and includes
+the JSONL, Markdown summary, a small Nsight Systems `.nsys-rep` capture, and `test_results/` evidence
+for the ordinary correctness, benchmark, quick/full baseline, Python-smoke status, and Nsight tool
+checks from the same validation session.
+
 Benchmark CTest entries use `RESOURCE_LOCK gpu` when registered with `helix_add_test(... GPU ...)`,
 but they do not receive the `cuda` label. `cuda` remains the ordinary correctness selector; benchmark
 data is opt-in development/reporting evidence and is not a speed-threshold gate by default.
+
+Manual Nsight capture is optional and requires local NVIDIA Nsight Systems / Nsight Compute tools.
+It is not an ordinary CI dependency, and capture failure does not fail ordinary correctness CI. Run
+the default benchmark executable directly and write reports under the benchmark artifact root:
+
+```sh
+cmake --build build/cmake --target legacy_spin_glass_benchmark --parallel "$(nproc)"
+
+export HELIX_BENCHMARK_OUTPUT_DIR="${HELIX_BENCHMARK_OUTPUT_DIR:-$(pwd)/build/cmake/benchmark}"
+run_id="$(date -u +%Y%m%dT%H%M%SZ)-legacy-spin-glass"
+mkdir -p "${HELIX_BENCHMARK_OUTPUT_DIR}/nsight"
+
+nsys profile \
+  --force-overwrite true \
+  --trace=cuda,nvtx,osrt \
+  --output "${HELIX_BENCHMARK_OUTPUT_DIR}/nsight/${run_id}-systems" \
+  build/cmake/legacy_spin_glass_benchmark
+
+ncu \
+  --force-overwrite \
+  --target-processes all \
+  --set full \
+  --export "${HELIX_BENCHMARK_OUTPUT_DIR}/nsight/${run_id}-compute" \
+  build/cmake/legacy_spin_glass_benchmark
+```
+
+The naming convention is `nsight/<run_id>-systems.*` and `nsight/<run_id>-compute.*`.
+`profiling.nsight_artifact` is `null` when no capture is collected, and the generated Markdown
+summary renders that state as `not_collected`. If a future opt-in build/run adds NVTX markers, reuse
+these names and evidence mappings: `helix.develop` for H-003, `helix.getdRhoSparse` for H-001/H-003,
+`helix.cusparseSpMM.wrapper` for H-001/H-004, `helix.transpose` for H-005, and
+`helix.result_extraction` for H-002.
+
+When the example script runs with `HELIX_BENCHMARK_WITH_NSIGHT=systems`, it sets
+`HELIX_BENCHMARK_NSIGHT_ARTIFACT=nsight/<run_id>-systems.nsys-rep` so the JSONL and Markdown summary
+record the expected Nsight report path.
+When correctness or baseline gates are run separately in the same validation session, set
+`HELIX_BENCHMARK_CORRECTNESS_GATE_STATUS=passed|failed` and
+`HELIX_BENCHMARK_BASELINE_GATE_STATUS=passed|failed` before invoking the benchmark. Standalone
+benchmark runs must leave those fields at the default `not_run`.
+
+No Nsight workflow runs on the default pull-request path. A future workflow must use
+`workflow_dispatch` or a scheduled trigger and upload only the benchmark artifact root, not baseline
+outputs.
 
 `helix_benchmark.jsonl` uses the internal `helix.benchmark.v1` schema. Each line is one run record
 with these top-level fields:
@@ -95,14 +152,32 @@ with these top-level fields:
   "timing_ms": {"init": 0.0, "warmup": 0.0, "steady_propagation": 0.0, "result_extraction": 0.0, "teardown": 0.0},
   "memory": {"peak_device_bytes": 0, "device_delta_bytes": 0, "measurement_method": "cudaMemGetInfo_delta"},
   "gates": {"correctness_gate_status": "not_run", "baseline_gate_status": "not_run"},
-  "profiling": {"instrumentation": ["runner_wall_clock"], "nvtx_enabled": false}
+  "profiling": {
+    "instrumentation": ["runner_wall_clock", "cudaDeviceSynchronize_phase_boundaries"],
+    "nvtx_enabled": false,
+    "nsight_artifact": null,
+    "hypotheses": [
+      {
+        "id": "H-001",
+        "name": "descriptor/workspace rebuild cost",
+        "status": "inconclusive",
+        "fields": [{"name": "context_init_ms", "value": "0.000", "unit": "ms"}],
+        "method": "runner wall-clock timing around helix::Context construction with CUDA sync boundaries",
+        "interpretation": "Context init timing is available as a P0 proxy.",
+        "downstream_action": "Add internal descriptor/workspace counters before backend redesign comparison."
+      }
+    ]
+  }
 }
 ```
 
 `helix_benchmark_summary.md` is the human-readable release/PR handoff generated from the same record.
 It includes the schema version, artifact paths, run environment, case metadata, phase timing table,
-memory table, correctness/baseline gate status, profiling evidence placeholders for H-001..H-005,
-and a short release-note snippet.
+memory table, correctness/baseline gate status, structured profiling evidence slots for H-001..H-005,
+and a short release-note snippet. Each hypothesis records `id`, `name`, `status`, `fields`, `method`,
+`interpretation`, and `downstream_action`. Allowed evidence statuses are `not_collected`, `collected`,
+`inconclusive`, `supported`, and `not_supported`; missing counters must use `not_collected` rather
+than a blank field.
 
 `examples/outputEnergy.txt` is still the checked-in numerical correctness baseline. Do not compare it
 to benchmark JSONL or use benchmark artifacts as a replacement for numerical or baseline gates.

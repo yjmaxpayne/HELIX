@@ -15,6 +15,15 @@ bool hasErrorAt(const std::vector<helix::test::benchmark::ValidationError>& erro
 	});
 }
 
+bool hasEvidenceId(const helix::test::benchmark::BenchmarkRecord& record, const std::string& id)
+{
+	return std::any_of(record.profiling.hypotheses.begin(),
+		record.profiling.hypotheses.end(),
+		[&id](const auto& hypothesis) {
+			return hypothesis.id == id;
+		});
+}
+
 void expectValid(helix::test::Reporter& reporter,
 	const helix::test::benchmark::BenchmarkRecord& record,
 	const char* message)
@@ -84,6 +93,25 @@ void test_sample_record_covers_contract(helix::test::Reporter& reporter)
 	reporter.expect(record.diagnostics->integrationOrder == record.problem.integrationOrder,
 		"diagnostics integration order mirrors problem integration order");
 	reporter.expect(record.diagnostics->status == "Success", "diagnostics status is Success");
+	reporter.expect(!record.profiling.nsightArtifact.has_value(),
+		"sample leaves Nsight artifact unset until manual capture");
+	reporter.expect(nsightArtifactSummaryValue(record.profiling.nsightArtifact) == "not_collected",
+		"summary value reports not_collected when Nsight capture is absent");
+	reporter.expect(record.profiling.hypotheses.size() == 5, "sample contains five profiling hypotheses");
+	reporter.expect(hasEvidenceId(record, "H-001"), "sample contains H-001 evidence slot");
+	reporter.expect(hasEvidenceId(record, "H-002"), "sample contains H-002 evidence slot");
+	reporter.expect(hasEvidenceId(record, "H-003"), "sample contains H-003 evidence slot");
+	reporter.expect(hasEvidenceId(record, "H-004"), "sample contains H-004 evidence slot");
+	reporter.expect(hasEvidenceId(record, "H-005"), "sample contains H-005 evidence slot");
+	for(const auto& hypothesis : record.profiling.hypotheses)
+	{
+		reporter.expect(!hypothesis.name.empty(), hypothesis.id + " evidence name is present");
+		reporter.expect(!hypothesis.status.empty(), hypothesis.id + " evidence status is present");
+		reporter.expect(!hypothesis.fields.empty(), hypothesis.id + " evidence fields are present");
+		reporter.expect(!hypothesis.method.empty(), hypothesis.id + " evidence method is present");
+		reporter.expect(!hypothesis.interpretation.empty(), hypothesis.id + " evidence interpretation is present");
+		reporter.expect(!hypothesis.downstreamAction.empty(), hypothesis.id + " downstream action is present");
+	}
 }
 
 void test_jsonl_emission_contains_required_blocks_and_escapes_strings(helix::test::Reporter& reporter)
@@ -107,6 +135,25 @@ void test_jsonl_emission_contains_required_blocks_and_escapes_strings(helix::tes
 	reporter.expect(jsonl.find("\"diagnostics\":{") != std::string::npos, "JSONL includes diagnostics block");
 	reporter.expect(jsonl.find("\"gates\":{") != std::string::npos, "JSONL includes gates block");
 	reporter.expect(jsonl.find("\"profiling\":{") != std::string::npos, "JSONL includes profiling block");
+	reporter.expect(jsonl.find("\"nsight_artifact\":null") != std::string::npos,
+		"JSONL emits null nsight_artifact when capture is absent");
+	record.profiling.nsightArtifact = "nsight/sample-systems.nsys-rep";
+	const std::string jsonlWithNsight = helix::test::benchmark::toJsonLine(record);
+	reporter.expect(jsonlWithNsight.find("\"nsight_artifact\":\"nsight/sample-systems.nsys-rep\"") != std::string::npos,
+		"JSONL emits Nsight artifact path when capture is declared");
+	reporter.expect(helix::test::benchmark::nsightArtifactSummaryValue(record.profiling.nsightArtifact)
+			== "nsight/sample-systems.nsys-rep",
+		"summary value reports declared Nsight artifact path");
+	reporter.expect(jsonl.find("\"hypotheses\":[{") != std::string::npos,
+		"JSONL emits structured profiling hypotheses");
+	reporter.expect(jsonl.find("\"id\":\"H-001\"") != std::string::npos, "JSONL includes H-001 evidence");
+	reporter.expect(jsonl.find("\"id\":\"H-005\"") != std::string::npos, "JSONL includes H-005 evidence");
+	reporter.expect(jsonl.find("\"fields\":[{") != std::string::npos, "JSONL includes evidence fields");
+	reporter.expect(jsonl.find("\"method\":") != std::string::npos, "JSONL includes evidence method");
+	reporter.expect(jsonl.find("\"interpretation\":") != std::string::npos,
+		"JSONL includes evidence interpretation");
+	reporter.expect(jsonl.find("\"downstream_action\":") != std::string::npos,
+		"JSONL includes evidence downstream action");
 	reporter.expect(jsonl.find("\"steady_propagation_scope\":\"excludes_init_warmup_result_extraction\"")
 			!= std::string::npos,
 		"JSONL states steady propagation timing scope");
@@ -136,6 +183,26 @@ void test_negative_samples_report_field_paths(helix::test::Reporter& reporter)
 	record = helix::test::benchmark::sampleLegacySpinGlassRecord();
 	record.memory.measurementMethod = "unsupported";
 	expectInvalidPath(reporter, record, "memory.measurement_method", "invalid memory method is rejected");
+
+	record = helix::test::benchmark::sampleLegacySpinGlassRecord();
+	record.gates.correctnessGateStatus = "unknown";
+	expectInvalidPath(reporter, record, "gates.correctness_gate_status", "invalid correctness gate status is rejected");
+
+	record = helix::test::benchmark::sampleLegacySpinGlassRecord();
+	record.gates.baselineGateStatus = "unknown";
+	expectInvalidPath(reporter, record, "gates.baseline_gate_status", "invalid baseline gate status is rejected");
+
+	record = helix::test::benchmark::sampleLegacySpinGlassRecord();
+	record.profiling.hypotheses.front().status = "pending";
+	expectInvalidPath(reporter, record, "profiling.hypotheses[0].status", "invalid evidence status is rejected");
+
+	record = helix::test::benchmark::sampleLegacySpinGlassRecord();
+	record.profiling.hypotheses.front().fields.clear();
+	expectInvalidPath(reporter, record, "profiling.hypotheses[0].fields", "missing evidence fields are rejected");
+
+	record = helix::test::benchmark::sampleLegacySpinGlassRecord();
+	record.profiling.hypotheses.pop_back();
+	expectInvalidPath(reporter, record, "profiling.hypotheses.H-005", "missing H-005 slot is rejected");
 }
 
 } // namespace

@@ -31,6 +31,110 @@ The runner prints ``benchmark_artifact_root: <path>`` before execution. Upload
 that artifact root for manual or scheduled benchmark workflows. Do not mix
 these files into ordinary CUDA correctness logs.
 
+User-facing example
+-------------------
+
+The same benchmark can be run through a repository example:
+
+.. code-block:: bash
+
+   examples/benchmark/legacy_spin_glass/run.sh
+
+The example writes artifacts to
+``build/cmake/example-benchmark/legacy_spin_glass/`` by default. A checked-in
+sample result lives in ``examples/benchmark/legacy_spin_glass/reference/`` and
+includes ``helix_benchmark.jsonl``, ``helix_benchmark_summary.md``, and one
+small Nsight Systems report from a local capture. Its ``test_results/``
+subdirectory records the ordinary correctness, explicit benchmark, quick/full
+baseline, Python-smoke status, and Nsight tool checks from the same validation
+session. Treat those files as format examples; timing values are
+machine-dependent.
+
+Optional Nsight capture
+-----------------------
+
+Nsight capture is an optional local profiling path. It requires NVIDIA Nsight
+Systems and Nsight Compute on the machine running the benchmark; these tools
+are not ordinary CI dependencies. Capture failures do not fail ordinary
+correctness CI, and HELIX does not install or run Nsight capture in the default
+CUDA correctness path.
+
+Build the default benchmark executable before capture:
+
+.. code-block:: bash
+
+   cmake --build build/cmake --target legacy_spin_glass_benchmark --parallel "$(nproc)"
+
+Use the benchmark artifact root and write reports under its ``nsight/``
+subdirectory:
+
+.. code-block:: bash
+
+   export HELIX_BENCHMARK_OUTPUT_DIR="${HELIX_BENCHMARK_OUTPUT_DIR:-$(pwd)/build/cmake/benchmark}"
+   run_id="$(date -u +%Y%m%dT%H%M%SZ)-legacy-spin-glass"
+   mkdir -p "${HELIX_BENCHMARK_OUTPUT_DIR}/nsight"
+
+   nsys profile \
+     --force-overwrite true \
+     --trace=cuda,nvtx,osrt \
+     --output "${HELIX_BENCHMARK_OUTPUT_DIR}/nsight/${run_id}-systems" \
+     build/cmake/legacy_spin_glass_benchmark
+
+   ncu \
+     --force-overwrite \
+     --target-processes all \
+     --set full \
+     --export "${HELIX_BENCHMARK_OUTPUT_DIR}/nsight/${run_id}-compute" \
+     build/cmake/legacy_spin_glass_benchmark
+
+The artifact convention is ``nsight/<run_id>-systems.*`` for Nsight Systems
+and ``nsight/<run_id>-compute.*`` for Nsight Compute. The benchmark JSONL
+field ``profiling.nsight_artifact`` is ``null`` when no capture is collected;
+the generated Markdown summary renders the same state as ``not_collected``.
+When using the example wrapper, set ``HELIX_BENCHMARK_WITH_NSIGHT=systems``;
+the wrapper sets ``HELIX_BENCHMARK_NSIGHT_ARTIFACT`` so the generated JSONL and
+summary record ``nsight/<run_id>-systems.nsys-rep``.
+If correctness or baseline gates were run separately in the same validation
+session, set ``HELIX_BENCHMARK_CORRECTNESS_GATE_STATUS=passed|failed`` and
+``HELIX_BENCHMARK_BASELINE_GATE_STATUS=passed|failed`` before invoking the
+benchmark. Standalone benchmark runs should leave those fields at the default
+``not_run``.
+
+Suggested NVTX markers
+----------------------
+
+The current benchmark does not require NVTX markers. If markers are added in a
+future opt-in build or run mode, reuse these names instead of creating a
+parallel naming scheme:
+
+.. list-table::
+   :header-rows: 1
+
+   * - Marker
+     - Suggested source location
+     - Evidence mapping
+   * - ``helix.develop``
+     - ``src/liouville.cu`` ``develop()``
+     - H-003 steady propagation and synchronization boundaries.
+   * - ``helix.getdRhoSparse``
+     - ``src/liouville.cu`` ``getdRhoSparse()``
+     - H-001 sparse descriptor/workspace cost and H-003 propagation timing.
+   * - ``helix.cusparseSpMM.wrapper``
+     - ``src/cuda_types.h`` ``cusparseCsrmmSpMM()``
+     - H-001 descriptor/workspace rebuild cost and H-004 handle/stream cost.
+   * - ``helix.transpose``
+     - ``src/matrix_util.cu`` ``transpose()`` and sparse call sites in
+       ``src/liouville.cu``
+     - H-005 transpose/layout hotspot evidence.
+   * - ``helix.result_extraction``
+     - ``src/library/result_extractor.cu`` ``ResultExtractor::final_reduced_density()``
+     - H-002 host copy and result extraction cost.
+
+Manual or scheduled Nsight workflows must use ``workflow_dispatch`` or a
+scheduled trigger only. They must not be added to the pull-request required
+path, and uploaded reports should stay under the benchmark artifact root rather
+than baseline output paths.
+
 CTest label boundary
 --------------------
 
@@ -106,7 +210,22 @@ Minimal sample:
      "timing_ms": {"init": 0.0, "warmup": 0.0, "steady_propagation": 0.0, "result_extraction": 0.0, "teardown": 0.0},
      "memory": {"peak_device_bytes": 0, "device_delta_bytes": 0, "measurement_method": "cudaMemGetInfo_delta"},
      "gates": {"correctness_gate_status": "not_run", "baseline_gate_status": "not_run"},
-     "profiling": {"instrumentation": ["runner_wall_clock"], "nvtx_enabled": false}
+     "profiling": {
+       "instrumentation": ["runner_wall_clock", "cudaDeviceSynchronize_phase_boundaries"],
+       "nvtx_enabled": false,
+       "nsight_artifact": null,
+       "hypotheses": [
+         {
+           "id": "H-001",
+           "name": "descriptor/workspace rebuild cost",
+           "status": "inconclusive",
+           "fields": [{"name": "context_init_ms", "value": "0.000", "unit": "ms"}],
+           "method": "runner wall-clock timing around helix::Context construction with CUDA sync boundaries",
+           "interpretation": "Context init timing is available as a P0 proxy.",
+           "downstream_action": "Add internal descriptor/workspace counters before backend redesign comparison."
+         }
+       ]
+     }
    }
 
 Markdown summary
@@ -122,8 +241,14 @@ the JSONL file. It contains:
   ``N``, ``KMax``, ``JMax``, hierarchy size, and steps;
 * timing and memory tables;
 * correctness and baseline gate status;
-* profiling evidence slots for H-001..H-005; and
+* structured profiling evidence slots for H-001..H-005; and
 * a release/PR snippet template.
+
+Each hypothesis entry records ``id``, ``name``, ``status``, ``fields``,
+``method``, ``interpretation``, and ``downstream_action``. Allowed evidence
+statuses are ``not_collected``, ``collected``, ``inconclusive``, ``supported``,
+and ``not_supported``. Missing counters must be recorded as ``not_collected``
+rather than left blank.
 
 Release/report handoff
 ----------------------

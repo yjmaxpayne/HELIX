@@ -455,6 +455,19 @@ if(HELIX_BUILD_TESTS)
     )
 
     helix_add_test(
+        NAME v003_legacy_spin_glass_benchmark_example_gate
+        COMMAND
+            ${CMAKE_COMMAND} -E env
+            HELIX_BUILD_DIR=${CMAKE_CURRENT_BINARY_DIR}
+            HELIX_BENCHMARK_OUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}/example-benchmark/legacy_spin_glass
+            ${CMAKE_CURRENT_SOURCE_DIR}/examples/benchmark/legacy_spin_glass/run.sh
+            --no-build
+        LABELS benchmark
+        GPU
+        TIMEOUT 180
+    )
+
+    helix_add_test(
         NAME v003_ctest_label_resource_lock_review
         COMMAND
             ${CMAKE_COMMAND}

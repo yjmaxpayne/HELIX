@@ -167,6 +167,22 @@ helix::RunResult runSolverCalibration(const helix::ContextOptions& options, std:
 	return result;
 }
 
+std::optional<std::string> optionalEnv(const char* name)
+{
+	const char* value = std::getenv(name);
+	if(value == nullptr || value[0] == '\0')
+	{
+		return std::nullopt;
+	}
+	return std::string(value);
+}
+
+std::string envOrDefault(const char* name, std::string fallback)
+{
+	const auto value = optionalEnv(name);
+	return value.value_or(std::move(fallback));
+}
+
 void require(bool condition, const std::string& message)
 {
 	if(!condition)
@@ -219,7 +235,8 @@ helix::test::benchmark::BenchmarkRecord makeRecord(const UtcTimestamp& timestamp
 	const helix::HierarchySpec& hierarchy,
 	const helix::RunResult& calibration,
 	const helix::test::benchmark::BenchmarkTiming& timing,
-	const helix::test::benchmark::BenchmarkMemory& memory)
+	const helix::test::benchmark::BenchmarkMemory& memory,
+	const std::optional<std::string>& nsightArtifact)
 {
 	using namespace helix::test::benchmark;
 
@@ -257,7 +274,15 @@ helix::test::benchmark::BenchmarkRecord makeRecord(const UtcTimestamp& timestamp
 	record.timing = timing;
 	record.memory = memory;
 	record.diagnostics = mirrorDiagnostics(calibration.diagnostics);
+	record.gates.correctnessGateStatus = envOrDefault("HELIX_BENCHMARK_CORRECTNESS_GATE_STATUS", "not_run");
+	record.gates.baselineGateStatus = envOrDefault("HELIX_BENCHMARK_BASELINE_GATE_STATUS", "not_run");
 	record.profiling.instrumentation = {"runner_wall_clock", "cudaDeviceSynchronize_phase_boundaries"};
+	if(nsightArtifact.has_value())
+	{
+		record.profiling.instrumentation.push_back("nsight_systems");
+		record.profiling.nsightArtifact = nsightArtifact;
+	}
+	record.profiling.hypotheses = defaultProfilingEvidenceSlots(record.timing, record.memory);
 	record.notes =
 		"Context phase timing with HEOMSolver smoke calibration; no legacy CLI output files expected";
 	return record;
@@ -294,15 +319,6 @@ std::string optionalBoolString(const std::optional<bool>& value)
 	return *value ? "true" : "false";
 }
 
-std::string optionalStringOr(const std::optional<std::string>& value, const std::string& fallback)
-{
-	if(value.has_value() && !value->empty())
-	{
-		return *value;
-	}
-	return fallback;
-}
-
 std::string joinStrings(const std::vector<std::string>& values)
 {
 	if(values.empty())
@@ -318,6 +334,24 @@ std::string joinStrings(const std::vector<std::string>& values)
 			output << ", ";
 		}
 		output << values[i];
+	}
+	return output.str();
+}
+
+std::string evidenceFieldsSummary(const std::vector<helix::test::benchmark::BenchmarkEvidenceField>& fields)
+{
+	std::ostringstream output;
+	for(std::size_t i = 0; i < fields.size(); ++i)
+	{
+		if(i != 0)
+		{
+			output << "; ";
+		}
+		output << fields[i].name << "=" << fields[i].value;
+		if(!fields[i].unit.empty())
+		{
+			output << " " << fields[i].unit;
+		}
 	}
 	return output.str();
 }
@@ -404,15 +438,22 @@ std::string markdownSummary(const helix::test::benchmark::BenchmarkRecord& recor
 		   << "## Profiling evidence\n\n"
 		   << "- Instrumentation: `" << joinStrings(record.profiling.instrumentation) << "`\n"
 		   << "- NVTX enabled: `" << (record.profiling.nvtxEnabled ? "true" : "false") << "`\n"
-		   << "- Nsight artifact: `"
-		   << optionalStringOr(record.profiling.nsightArtifact, artifacts.nsightDir.string()) << "`\n\n"
-		   << "| Hypothesis | Status | Evidence slot |\n"
-		   << "| --- | --- | --- |\n"
-		   << "| H-001 | pending | Filled by PLAN-T6 profiling evidence slots. |\n"
-		   << "| H-002 | pending | Filled by PLAN-T6 profiling evidence slots. |\n"
-		   << "| H-003 | pending | Filled by PLAN-T6 profiling evidence slots. |\n"
-		   << "| H-004 | pending | Filled by PLAN-T6 profiling evidence slots. |\n"
-		   << "| H-005 | pending | Filled by PLAN-T6 profiling evidence slots. |\n\n"
+		   << "- Nsight artifact (`profiling.nsight_artifact`): `"
+		   << helix::test::benchmark::nsightArtifactSummaryValue(record.profiling.nsightArtifact) << "`\n"
+		   << "- Nsight directory: `" << artifacts.nsightDir.string() << "`\n\n"
+		   << "| Hypothesis | Status | Fields | Method | Interpretation | Downstream action |\n"
+		   << "| --- | --- | --- | --- | --- | --- |\n";
+	for(const auto& hypothesis : record.profiling.hypotheses)
+	{
+		output << "| " << hypothesis.id << " " << hypothesis.name
+			   << " | `" << hypothesis.status << "`"
+			   << " | " << evidenceFieldsSummary(hypothesis.fields)
+			   << " | " << hypothesis.method
+			   << " | " << hypothesis.interpretation
+			   << " | " << hypothesis.downstreamAction << " |\n";
+	}
+	output << "\n";
+	output
 		   << "## Release / PR handoff snippet\n\n"
 		   << "- Environment: `" << record.gpu.name << "`, CUDA runtime `"
 		   << record.cuda.runtimeVersion << "`, driver `" << record.cuda.driverVersion
@@ -429,7 +470,8 @@ std::string markdownSummary(const helix::test::benchmark::BenchmarkRecord& recor
 		   << ", method=`" << record.memory.measurementMethod << "`.\n"
 		   << "- Gates: correctness=`" << record.gates.correctnessGateStatus << "`, baseline=`"
 		   << record.gates.baselineGateStatus << "`; speed threshold=`none`.\n"
-		   << "- Follow-up evidence: H-001..H-005 are pending until profiling evidence capture.\n";
+		   << "- Profiling evidence: H-001..H-005 slots are populated in `profiling.hypotheses`; "
+			  "`not_collected` marks intentionally deferred counters.\n";
 	return output.str();
 }
 
@@ -532,7 +574,8 @@ int main()
 			hierarchy,
 			calibration,
 			timing,
-			memory);
+			memory,
+			optionalEnv("HELIX_BENCHMARK_NSIGHT_ARTIFACT"));
 		validateRecord(record);
 		writeArtifacts(artifacts, record, calibration);
 
