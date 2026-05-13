@@ -46,6 +46,20 @@ cmake --build build/cmake --parallel "$(nproc)"
 
 The executable is `build/cmake/helix`.
 
+## Benchmark example
+
+The opt-in benchmark path writes JSONL, a Markdown summary, and optional
+Nsight artifacts without changing the correctness baseline:
+
+```bash
+examples/benchmark/legacy_spin_glass/run.sh
+HELIX_BENCHMARK_WITH_NSIGHT=systems examples/benchmark/legacy_spin_glass/run.sh
+```
+
+Artifacts default to `build/cmake/example-benchmark/legacy_spin_glass/`. A
+captured sample result is checked in under
+`examples/benchmark/legacy_spin_glass/reference/` for format inspection.
+
 ## C++ API
 
 The C++ library target is `helix_core`, exported to consumers as `HELIX::helix`.

@@ -1,0 +1,19 @@
+Command:
+  command -v nsys
+  command -v ncu
+
+Result:
+  /usr/local/cuda-13.0/bin/nsys
+  /usr/local/cuda-13.0/bin/ncu
+
+Capture:
+  HELIX_BENCHMARK_WITH_NSIGHT=systems examples/benchmark/legacy_spin_glass/run.sh --no-build
+
+Generated:
+  nsight/20260513T130852Z-legacy-spin-glass-systems.nsys-rep (local only, not checked in)
+
+Notes:
+  Nsight Systems emitted CPU sampling/context-switch permission warnings in this environment, but
+  CUDA/NVTX tracing completed and the .nsys-rep report was generated.
+  Raw Nsight reports are excluded from the repository because they can embed environment variables,
+  credentials, and local paths.

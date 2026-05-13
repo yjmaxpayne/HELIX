@@ -74,6 +74,16 @@ Makefile
 **/snapshot_rho*.dat
 !/examples/outputEnergy.txt
 
+# Profiler captures can embed environment variables, credentials, and local paths
+**/nsight/
+*.nsys-rep
+*.ncu-rep
+*.qdrep
+*.qdstrm
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+
 # Logs and temporary files
 *.log
 *.tmp

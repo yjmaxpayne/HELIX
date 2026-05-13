@@ -1,0 +1,12 @@
+Command:
+  ctest --test-dir build/cmake -N | rg "v01_python_smoke_gate|python"
+
+Result:
+  Not run in this default build.
+
+Reason:
+  build/cmake is configured with HELIX_BUILD_PYTHON=OFF, so v01_python_smoke_gate is not registered.
+
+Contract:
+  No Python benchmark API was added. The optional Python smoke/result-shape gate remains a separate
+  HELIX_BUILD_PYTHON=ON validation path.
