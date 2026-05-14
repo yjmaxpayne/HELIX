@@ -1,4 +1,5 @@
 #include "initialize.h"
+#include "library/backend_profiling.h"
 #include "liouville.h"
 #include "matrix_storage.h"
 #include "parameters.h"
@@ -40,14 +41,37 @@ void printReferenceInput()
 			  << " toy_profile=disabled(default configuration MVP)" << '\n';
 }
 
+std::size_t expectedSpmmCallsPerHierarchyBlock()
+{
+	std::size_t calls = 6;
+#ifdef USE_COUNTER
+	calls += 2;
+#endif
+	return calls;
+}
+
 void testSparseDrhoInvariants(helix::test::Reporter& test)
 {
 	initialize();
 	printReferenceInput();
 
 	device_vector<Complex> derivative(dRho.size(), make_Complex(0.0, 0.0));
-	getdRhoSparse(dRho, derivative);
-	test.expect(cudaDeviceSynchronize() == cudaSuccess, "sparse dRho computation completes");
+	helix::library::BackendProfilingCounters profilingSnapshot;
+	{
+		helix::library::ScopedBackendProfiling profiling;
+		getdRhoSparse(dRho, derivative);
+		test.expect(cudaDeviceSynchronize() == cudaSuccess, "sparse dRho computation completes");
+		profilingSnapshot = profiling.snapshot();
+	}
+	const std::size_t expectedSpmmCalls =
+		static_cast<std::size_t>(hierarchySize) * expectedSpmmCallsPerHierarchyBlock();
+	std::cout << "sparse_dRho_h_diagonal_elementwise_spmm_calls: actual="
+			  << profilingSnapshot.spmm.callCount.value_or(0)
+			  << " expected=" << expectedSpmmCalls
+			  << " reference=H_DIAGONAL elementwise path leaves only V-path SpMM calls" << '\n';
+	test.expect(
+		profilingSnapshot.spmm.callCount.value_or(0) == expectedSpmmCalls,
+		"sparse dRho H diagonal specialization removes H-path SpMM calls");
 
 	const thrust::host_vector<Complex> actual = derivative;
 	test.expect(helix::test::allFinite(actual), "sparse dRho values remain finite");

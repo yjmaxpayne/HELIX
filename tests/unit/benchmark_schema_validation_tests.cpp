@@ -79,6 +79,24 @@ void test_sample_record_covers_contract(helix::test::Reporter& reporter)
 	reporter.expect(record.problem.hierarchySize == 10, "sample records hierarchy_size=10");
 	reporter.expect(record.timing.steadyPropagationScope == "excludes_init_warmup_result_extraction",
 		"steady propagation timing explicitly excludes init, warmup, and result extraction");
+	reporter.expect(record.measurementScopes.mainMeasurementScope == "benchmark.main",
+		"sample records the main measurement scope");
+	reporter.expect(record.measurementScopes.mainMeasurementStatus == "captured",
+		"sample marks the main measurement scope as captured");
+	reporter.expect(record.measurementScopes.calibrationScope == "benchmark.calibration",
+		"sample records the calibration scope");
+	reporter.expect(record.measurementScopes.calibrationStatus == "captured",
+		"sample marks calibration as captured by default");
+	reporter.expect(record.measurementScopes.calibrationCaptured,
+		"sample records calibration capture state");
+	reporter.expect(record.measurementScopes.calibrationExcludedFromMain,
+		"sample excludes calibration from main aggregation");
+	reporter.expect(record.measurementScopes.nvtxNamingConvention.find("benchmark.main.steady_propagation")
+			!= std::string::npos,
+		"sample exposes the NVTX naming convention for main steady propagation");
+	reporter.expect(record.measurementScopes.nvtxNamingConvention.find("benchmark.calibration")
+			!= std::string::npos,
+		"sample exposes the NVTX naming convention for calibration");
 	reporter.expect(record.diagnostics.has_value(), "sample includes diagnostics mirror");
 	reporter.expect(record.diagnostics->backend == record.caseInfo.backend, "diagnostics backend mirrors case backend");
 	reporter.expect(record.diagnostics->precision == record.caseInfo.precision,
@@ -98,6 +116,20 @@ void test_sample_record_covers_contract(helix::test::Reporter& reporter)
 	reporter.expect(nsightArtifactSummaryValue(record.profiling.nsightArtifact) == "not_collected",
 		"summary value reports not_collected when Nsight capture is absent");
 	reporter.expect(record.profiling.hypotheses.size() == 5, "sample contains five profiling hypotheses");
+	reporter.expect(!record.profiling.counters.spmm.callCount.collected(),
+		"sample keeps SpMM call count explicitly not_collected");
+	reporter.expect(record.profiling.counters.resultExtraction.syncWaitMs.collected(),
+		"sample records result extraction sync wait counter");
+	reporter.expect(record.profiling.counters.resultExtraction.hostAllocationMs.collected(),
+		"sample records result extraction host allocation counter");
+	reporter.expect(record.profiling.counters.resultExtraction.d2hCopyMs.collected(),
+		"sample records result extraction D2H copy counter");
+	reporter.expect(record.profiling.counters.resultExtraction.conversionMs.collected(),
+		"sample records result extraction conversion counter");
+	reporter.expect(record.profiling.counters.resultExtraction.d2hBytes.collected(),
+		"sample records result extraction D2H bytes");
+	reporter.expect(record.profiling.counters.resultExtraction.elementCount.collected(),
+		"sample records result extraction element count");
 	reporter.expect(hasEvidenceId(record, "H-001"), "sample contains H-001 evidence slot");
 	reporter.expect(hasEvidenceId(record, "H-002"), "sample contains H-002 evidence slot");
 	reporter.expect(hasEvidenceId(record, "H-003"), "sample contains H-003 evidence slot");
@@ -112,6 +144,11 @@ void test_sample_record_covers_contract(helix::test::Reporter& reporter)
 		reporter.expect(!hypothesis.interpretation.empty(), hypothesis.id + " evidence interpretation is present");
 		reporter.expect(!hypothesis.downstreamAction.empty(), hypothesis.id + " downstream action is present");
 	}
+
+	auto mainOnlyRecord = record;
+	mainOnlyRecord.measurementScopes.calibrationCaptured = false;
+	mainOnlyRecord.measurementScopes.calibrationStatus = "not_captured";
+	expectValid(reporter, mainOnlyRecord, "main-only benchmark record validates with calibration not captured");
 }
 
 void test_jsonl_emission_contains_required_blocks_and_escapes_strings(helix::test::Reporter& reporter)
@@ -131,10 +168,39 @@ void test_jsonl_emission_contains_required_blocks_and_escapes_strings(helix::tes
 	reporter.expect(jsonl.find("\"case\":{") != std::string::npos, "JSONL includes case block");
 	reporter.expect(jsonl.find("\"problem\":{") != std::string::npos, "JSONL includes problem block");
 	reporter.expect(jsonl.find("\"timing_ms\":{") != std::string::npos, "JSONL includes timing_ms block");
+	reporter.expect(jsonl.find("\"measurement_scope\":{") != std::string::npos,
+		"JSONL includes measurement_scope block");
+	reporter.expect(jsonl.find("\"main_measurement_scope\":\"benchmark.main\"") != std::string::npos,
+		"JSONL states the main measurement scope");
+	reporter.expect(jsonl.find("\"calibration_scope\":\"benchmark.calibration\"") != std::string::npos,
+		"JSONL states the calibration scope");
+	reporter.expect(jsonl.find("\"calibration_captured\":true") != std::string::npos,
+		"JSONL states calibration capture state");
+	reporter.expect(jsonl.find("\"calibration_excluded_from_main\":true") != std::string::npos,
+		"JSONL states calibration exclusion from main aggregation");
+	reporter.expect(jsonl.find("\"nvtx_naming_convention\":\"benchmark.main") != std::string::npos,
+		"JSONL states the NVTX scope naming convention");
 	reporter.expect(jsonl.find("\"memory\":{") != std::string::npos, "JSONL includes memory block");
 	reporter.expect(jsonl.find("\"diagnostics\":{") != std::string::npos, "JSONL includes diagnostics block");
 	reporter.expect(jsonl.find("\"gates\":{") != std::string::npos, "JSONL includes gates block");
 	reporter.expect(jsonl.find("\"profiling\":{") != std::string::npos, "JSONL includes profiling block");
+	reporter.expect(jsonl.find("\"counters\":{") != std::string::npos, "JSONL includes profiling counters");
+	reporter.expect(jsonl.find("\"spmm\":{\"call_count\":\"not_collected\"") != std::string::npos,
+		"JSONL emits not_collected SpMM counters");
+	reporter.expect(jsonl.find("\"result_extraction\":{") != std::string::npos,
+		"JSONL includes result extraction counters");
+	reporter.expect(jsonl.find("\"sync_wait_ms\":") != std::string::npos,
+		"JSONL includes result extraction sync wait");
+	reporter.expect(jsonl.find("\"host_allocation_ms\":") != std::string::npos,
+		"JSONL includes result extraction host allocation timing");
+	reporter.expect(jsonl.find("\"d2h_copy_ms\":") != std::string::npos,
+		"JSONL includes result extraction D2H copy timing");
+	reporter.expect(jsonl.find("\"conversion_ms\":") != std::string::npos,
+		"JSONL includes result extraction conversion timing");
+	reporter.expect(jsonl.find("\"d2h_bytes\":") != std::string::npos,
+		"JSONL includes result extraction D2H bytes");
+	reporter.expect(jsonl.find("\"element_count\":") != std::string::npos,
+		"JSONL includes result extraction element count");
 	reporter.expect(jsonl.find("\"nsight_artifact\":null") != std::string::npos,
 		"JSONL emits null nsight_artifact when capture is absent");
 	record.profiling.nsightArtifact = "nsight/sample-systems.nsys-rep";
@@ -177,6 +243,26 @@ void test_negative_samples_report_field_paths(helix::test::Reporter& reporter)
 	expectInvalidPath(reporter, record, "timing_ms.steady_propagation", "negative steady timing is rejected");
 
 	record = helix::test::benchmark::sampleLegacySpinGlassRecord();
+	record.measurementScopes.mainMeasurementScope.clear();
+	expectInvalidPath(reporter, record, "measurement_scope.main_measurement_scope",
+		"missing main measurement scope is rejected");
+
+	record = helix::test::benchmark::sampleLegacySpinGlassRecord();
+	record.measurementScopes.calibrationStatus = "pending";
+	expectInvalidPath(reporter, record, "measurement_scope.calibration_status",
+		"invalid calibration status is rejected");
+
+	record = helix::test::benchmark::sampleLegacySpinGlassRecord();
+	record.measurementScopes.calibrationCaptured = false;
+	expectInvalidPath(reporter, record, "measurement_scope.calibration_captured",
+		"calibration capture flag must match captured status");
+
+	record = helix::test::benchmark::sampleLegacySpinGlassRecord();
+	record.measurementScopes.calibrationExcludedFromMain = false;
+	expectInvalidPath(reporter, record, "measurement_scope.calibration_excluded_from_main",
+		"calibration must be excluded from main aggregation");
+
+	record = helix::test::benchmark::sampleLegacySpinGlassRecord();
 	record.diagnostics.reset();
 	expectInvalidPath(reporter, record, "diagnostics", "missing diagnostics mirror is rejected");
 
@@ -203,6 +289,14 @@ void test_negative_samples_report_field_paths(helix::test::Reporter& reporter)
 	record = helix::test::benchmark::sampleLegacySpinGlassRecord();
 	record.profiling.hypotheses.pop_back();
 	expectInvalidPath(reporter, record, "profiling.hypotheses.H-005", "missing H-005 slot is rejected");
+
+	record = helix::test::benchmark::sampleLegacySpinGlassRecord();
+	record.profiling.counters.resultExtraction.syncWaitMs =
+		helix::test::benchmark::collectedCounter(-0.01, "ms");
+	expectInvalidPath(reporter,
+		record,
+		"profiling.counters.result_extraction.sync_wait_ms",
+		"negative result extraction sync wait counter is rejected");
 }
 
 } // namespace

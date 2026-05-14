@@ -104,13 +104,25 @@ session, set ``HELIX_BENCHMARK_CORRECTNESS_GATE_STATUS=passed|failed`` and
 ``HELIX_BENCHMARK_BASELINE_GATE_STATUS=passed|failed`` before invoking the
 benchmark. Standalone benchmark runs should leave those fields at the default
 ``not_run``.
+Set ``HELIX_BENCHMARK_CAPTURE_CALIBRATION=0`` for a main-only artifact, or use
+the default ``1`` to run the separate HEOMSolver calibration cross-check.
+Calibration is always recorded as a separate scope and is excluded from main
+timing aggregation.
+Set ``HELIX_CUSPARSE_REUSE_PLAN=0`` only for rollback triage; it disables the
+reusable cuSPARSE backend plan and routes sparse calls through the legacy
+``cuda_types.h`` compatibility wrappers, reintroducing per-call wrapper setup.
 
 Suggested NVTX markers
 ----------------------
 
-The current benchmark does not require NVTX markers. If markers are added in a
-future opt-in build or run mode, reuse these names instead of creating a
-parallel naming scheme:
+The current benchmark does not require NVTX markers. Benchmark artifacts
+nevertheless record this scope naming convention for future opt-in captures:
+``benchmark.main.init``, ``benchmark.main.warmup``,
+``benchmark.main.steady_propagation``, ``benchmark.main.result_extraction``,
+``benchmark.main.teardown``, and ``benchmark.calibration``.
+
+If internal markers are added in a future opt-in build or run mode, reuse these
+names instead of creating a parallel naming scheme:
 
 .. list-table::
    :header-rows: 1
@@ -124,8 +136,8 @@ parallel naming scheme:
    * - ``helix.getdRhoSparse``
      - ``src/liouville.cu`` ``getdRhoSparse()``
      - H-001 sparse descriptor/workspace cost and H-003 propagation timing.
-   * - ``helix.cusparseSpMM.wrapper``
-     - ``src/cuda_types.h`` ``cusparseCsrmmSpMM()``
+   * - ``helix.cuda_sparse_backend_plan``
+     - ``src/cuda_sparse_backend_plan.cu`` ``CudaSparseBackendPlan::run()``
      - H-001 descriptor/workspace rebuild cost and H-004 handle/stream cost.
    * - ``helix.transpose``
      - ``src/matrix_util.cu`` ``transpose()`` and sparse call sites in
@@ -192,6 +204,9 @@ Important fields:
    * - ``timing_ms``
      - Init, warmup, steady propagation, result extraction, and teardown
        timings in milliseconds.
+   * - ``measurement_scope``
+     - Main/calibration scope names, capture state, calibration exclusion from
+       main aggregation, and the NVTX naming convention.
    * - ``memory``
      - Peak device bytes, delta bytes, and measurement method.
    * - ``gates``
@@ -199,7 +214,10 @@ Important fields:
        ``failed``. Benchmark-only runs default to ``not_run``.
    * - ``profiling``
      - Instrumentation list, NVTX flag, optional Nsight artifact, and
-       hypothesis evidence slots.
+       hypothesis evidence slots. The generated Markdown summary also records
+       the ``H_DIAGONAL`` elementwise specialization comparison; the default
+       steady benchmark expects V-path-only SpMM calls after the diagonal
+       Hamiltonian term leaves the cuSPARSE path.
 
 Minimal sample:
 
@@ -214,21 +232,47 @@ Minimal sample:
      "case": {"name": "legacy_spin_glass_default", "backend": "LegacyCudaSparse", "precision": "single"},
      "problem": {"N": 1024, "KMax": 2, "JMax": 3, "hierarchy_size": 10, "steps": 2},
      "timing_ms": {"init": 0.0, "warmup": 0.0, "steady_propagation": 0.0, "result_extraction": 0.0, "teardown": 0.0},
+     "measurement_scope": {
+       "main_measurement_scope": "benchmark.main",
+       "main_measurement_status": "captured",
+       "calibration_scope": "benchmark.calibration",
+       "calibration_status": "captured",
+       "calibration_captured": true,
+       "calibration_excluded_from_main": true,
+       "nvtx_naming_convention": "benchmark.main.init,benchmark.main.warmup,benchmark.main.steady_propagation,benchmark.main.result_extraction,benchmark.main.teardown,benchmark.calibration"
+     },
      "memory": {"peak_device_bytes": 0, "device_delta_bytes": 0, "measurement_method": "cudaMemGetInfo_delta"},
      "gates": {"correctness_gate_status": "not_run", "baseline_gate_status": "not_run"},
      "profiling": {
        "instrumentation": ["runner_wall_clock", "cudaDeviceSynchronize_phase_boundaries"],
        "nvtx_enabled": false,
        "nsight_artifact": null,
+       "counters": {
+         "spmm": {
+           "call_count": 320,
+           "descriptor_create_count": 0,
+           "workspace_alloc_count": 0,
+           "workspace_bytes": 183,
+           "buffer_size_query_count": 0
+         },
+         "result_extraction": {
+           "sync_wait_ms": 0.0,
+           "host_allocation_ms": 0.0,
+           "d2h_copy_ms": 0.0,
+           "conversion_ms": 0.0,
+           "d2h_bytes": 8388608,
+           "element_count": 1048576
+         }
+       },
        "hypotheses": [
          {
            "id": "H-001",
            "name": "descriptor/workspace rebuild cost",
-           "status": "inconclusive",
-           "fields": [{"name": "context_init_ms", "value": "0.000", "unit": "ms"}],
-           "method": "runner wall-clock timing around helix::Context construction with CUDA sync boundaries",
-           "interpretation": "Context init timing is available as a P0 proxy.",
-           "downstream_action": "Add internal descriptor/workspace counters before backend redesign comparison."
+           "status": "collected",
+           "fields": [{"name": "spmm_call_count", "value": "320", "unit": "count"}],
+           "method": "private CudaSparseBackendPlan SpMM counters captured in the steady propagation scope after warmup",
+           "interpretation": "Descriptor creation, workspace allocation, buffer-size query, and SpMM call counters are separated from aggregate timing; warmed compatible calls should report zero setup counters.",
+           "downstream_action": "Use these counters to gate downstream H-diagonal, D2D traffic, layout, and graph feasibility tasks."
          }
        ]
      }
@@ -245,7 +289,10 @@ the JSONL file. It contains:
   architecture, GPU, driver, and runtime;
 * ``legacy_spin_glass_default`` case metadata, including backend, precision,
   ``N``, ``KMax``, ``JMax``, hierarchy size, and steps;
-* timing and memory tables;
+* timing, measurement scope, memory, and profiling counter tables;
+* CUDA 13 cuSPARSE API adopt/defer/reject decision table;
+* structural legacy-wrapper versus reusable-plan SpMM setup comparison;
+* ``H_DIAGONAL`` elementwise specialization comparison;
 * correctness and baseline gate status;
 * structured profiling evidence slots for H-001..H-005; and
 * a release/PR snippet template.

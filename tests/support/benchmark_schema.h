@@ -78,6 +78,18 @@ struct BenchmarkTiming {
 	std::string steadyPropagationScope = "excludes_init_warmup_result_extraction";
 };
 
+struct BenchmarkMeasurementScopes {
+	std::string mainMeasurementScope = "benchmark.main";
+	std::string mainMeasurementStatus = "captured";
+	std::string calibrationScope = "benchmark.calibration";
+	std::string calibrationStatus = "captured";
+	bool calibrationCaptured = true;
+	bool calibrationExcludedFromMain = true;
+	std::string nvtxNamingConvention =
+		"benchmark.main.init,benchmark.main.warmup,benchmark.main.steady_propagation,"
+		"benchmark.main.result_extraction,benchmark.main.teardown,benchmark.calibration";
+};
+
 struct BenchmarkMemory {
 	long long peakDeviceBytes = 0;
 	long long deviceDeltaBytes = 0;
@@ -106,6 +118,83 @@ struct BenchmarkEvidenceField {
 	std::string unit;
 };
 
+struct BenchmarkCounterMetric {
+	std::string unit;
+	std::optional<double> doubleValue;
+	std::optional<long long> integerValue;
+
+	bool collected() const noexcept
+	{
+		return doubleValue.has_value() || integerValue.has_value();
+	}
+};
+
+inline BenchmarkCounterMetric notCollectedCounter(std::string unit)
+{
+	BenchmarkCounterMetric metric;
+	metric.unit = std::move(unit);
+	return metric;
+}
+
+inline BenchmarkCounterMetric collectedCounter(double value, std::string unit)
+{
+	BenchmarkCounterMetric metric;
+	metric.unit = std::move(unit);
+	metric.doubleValue = value;
+	return metric;
+}
+
+inline BenchmarkCounterMetric collectedCounter(long long value, std::string unit)
+{
+	BenchmarkCounterMetric metric;
+	metric.unit = std::move(unit);
+	metric.integerValue = value;
+	return metric;
+}
+
+struct BenchmarkSpmmCounters {
+	BenchmarkCounterMetric callCount = notCollectedCounter("count");
+	BenchmarkCounterMetric timeMs = notCollectedCounter("ms");
+	BenchmarkCounterMetric descriptorCreateCount = notCollectedCounter("count");
+	BenchmarkCounterMetric workspaceAllocCount = notCollectedCounter("count");
+	BenchmarkCounterMetric workspaceBytes = notCollectedCounter("bytes");
+	BenchmarkCounterMetric bufferSizeQueryCount = notCollectedCounter("count");
+};
+
+struct BenchmarkTransposeCounters {
+	BenchmarkCounterMetric callCount = notCollectedCounter("count");
+	BenchmarkCounterMetric timeMs = notCollectedCounter("ms");
+	BenchmarkCounterMetric bytes = notCollectedCounter("bytes");
+};
+
+struct BenchmarkD2DCopyCounters {
+	BenchmarkCounterMetric copyCount = notCollectedCounter("count");
+	BenchmarkCounterMetric timeMs = notCollectedCounter("ms");
+	BenchmarkCounterMetric bytes = notCollectedCounter("bytes");
+};
+
+struct BenchmarkSyncCounters {
+	BenchmarkCounterMetric deviceSynchronizeCount = notCollectedCounter("count");
+	BenchmarkCounterMetric syncWaitMs = notCollectedCounter("ms");
+};
+
+struct BenchmarkResultExtractionCounters {
+	BenchmarkCounterMetric syncWaitMs = notCollectedCounter("ms");
+	BenchmarkCounterMetric hostAllocationMs = notCollectedCounter("ms");
+	BenchmarkCounterMetric d2hCopyMs = notCollectedCounter("ms");
+	BenchmarkCounterMetric conversionMs = notCollectedCounter("ms");
+	BenchmarkCounterMetric d2hBytes = notCollectedCounter("bytes");
+	BenchmarkCounterMetric elementCount = notCollectedCounter("count");
+};
+
+struct BenchmarkProfilingCounters {
+	BenchmarkSpmmCounters spmm;
+	BenchmarkTransposeCounters transpose;
+	BenchmarkD2DCopyCounters d2dCopy;
+	BenchmarkSyncCounters sync;
+	BenchmarkResultExtractionCounters resultExtraction;
+};
+
 struct BenchmarkHypothesisEvidence {
 	std::string id;
 	std::string name;
@@ -120,6 +209,7 @@ struct BenchmarkProfiling {
 	std::vector<std::string> instrumentation = {"runner_wall_clock"};
 	bool nvtxEnabled = false;
 	std::optional<std::string> nsightArtifact;
+	BenchmarkProfilingCounters counters;
 	std::vector<BenchmarkHypothesisEvidence> hypotheses;
 };
 
@@ -135,6 +225,7 @@ struct BenchmarkRecord {
 	BenchmarkCase caseInfo;
 	BenchmarkProblem problem;
 	BenchmarkTiming timing;
+	BenchmarkMeasurementScopes measurementScopes;
 	BenchmarkMemory memory;
 	std::optional<BenchmarkDiagnosticsMirror> diagnostics = BenchmarkDiagnosticsMirror{};
 	BenchmarkGates gates;
@@ -231,22 +322,58 @@ inline BenchmarkEvidenceField evidenceField(std::string name, std::string value,
 	return {std::move(name), std::move(value), std::move(unit)};
 }
 
+inline std::string counterSummary(const BenchmarkCounterMetric& metric)
+{
+	if(metric.integerValue.has_value())
+	{
+		return std::to_string(*metric.integerValue);
+	}
+	if(metric.doubleValue.has_value())
+	{
+		return fixedMilliseconds(*metric.doubleValue);
+	}
+	return "not_collected";
+}
+
+inline BenchmarkProfilingCounters sampleProfilingCounters(const BenchmarkProblem& problem)
+{
+	BenchmarkProfilingCounters counters;
+	counters.sync.deviceSynchronizeCount = collectedCounter(1LL, "count");
+	counters.sync.syncWaitMs = collectedCounter(0.0, "ms");
+	counters.resultExtraction.syncWaitMs = collectedCounter(0.0, "ms");
+	counters.resultExtraction.hostAllocationMs = collectedCounter(0.0, "ms");
+	counters.resultExtraction.d2hCopyMs = collectedCounter(0.0, "ms");
+	counters.resultExtraction.conversionMs = collectedCounter(0.0, "ms");
+	counters.resultExtraction.elementCount =
+		collectedCounter(static_cast<long long>(problem.hilbertSize * problem.hilbertSize), "count");
+	counters.resultExtraction.d2hBytes =
+		collectedCounter(static_cast<long long>(problem.hilbertSize * problem.hilbertSize * 8), "bytes");
+	return counters;
+}
+
 inline std::vector<BenchmarkHypothesisEvidence> defaultProfilingEvidenceSlots(const BenchmarkTiming& timing,
-	const BenchmarkMemory&)
+	const BenchmarkMemory&,
+	const BenchmarkProfilingCounters& counters)
 {
 	std::vector<BenchmarkHypothesisEvidence> slots;
+	const bool d2dCopyCollected =
+		counters.d2dCopy.copyCount.collected() || counters.d2dCopy.bytes.collected();
 	slots.push_back({
 		"H-001",
 		"descriptor/workspace rebuild cost",
-		"inconclusive",
+		"collected",
 		{
 			evidenceField("context_init_ms", fixedMilliseconds(timing.init), "ms"),
-			evidenceField("wrapper_call_count", "not_collected", "count"),
-			evidenceField("descriptor_rebuild_time_ms", "not_collected", "ms")
+			evidenceField("spmm_call_count", counterSummary(counters.spmm.callCount), "count"),
+			evidenceField("descriptor_create_count", counterSummary(counters.spmm.descriptorCreateCount), "count"),
+			evidenceField("buffer_size_query_count", counterSummary(counters.spmm.bufferSizeQueryCount), "count"),
+			evidenceField("workspace_alloc_count", counterSummary(counters.spmm.workspaceAllocCount), "count"),
+			evidenceField("workspace_bytes", counterSummary(counters.spmm.workspaceBytes), "bytes"),
+			evidenceField("spmm_time_ms", counterSummary(counters.spmm.timeMs), "ms")
 		},
-		"runner wall-clock timing around helix::Context construction with CUDA sync boundaries",
-		"Context init timing is available as a P0 proxy, but descriptor/workspace rebuild counters are not separated yet.",
-		"Add internal descriptor/workspace counters before backend redesign comparison."
+		"private CudaSparseBackendPlan SpMM counters captured in the steady propagation scope after warmup",
+		"Descriptor creation, workspace allocation, buffer-size query, and SpMM call counters are separated from aggregate timing; warmed compatible calls should report zero setup counters.",
+		"Use these counters to gate downstream H-diagonal, D2D traffic, layout, and graph feasibility tasks."
 	});
 	slots.push_back({
 		"H-002",
@@ -254,12 +381,17 @@ inline std::vector<BenchmarkHypothesisEvidence> defaultProfilingEvidenceSlots(co
 		"collected",
 		{
 			evidenceField("result_extraction_ms", fixedMilliseconds(timing.resultExtraction), "ms"),
-			evidenceField("d2h_bytes", "not_collected", "bytes"),
+			evidenceField("sync_wait_ms", counterSummary(counters.resultExtraction.syncWaitMs), "ms"),
+			evidenceField("host_allocation_ms", counterSummary(counters.resultExtraction.hostAllocationMs), "ms"),
+			evidenceField("d2h_copy_ms", counterSummary(counters.resultExtraction.d2hCopyMs), "ms"),
+			evidenceField("conversion_ms", counterSummary(counters.resultExtraction.conversionMs), "ms"),
+			evidenceField("d2h_bytes", counterSummary(counters.resultExtraction.d2hBytes), "bytes"),
+			evidenceField("element_count", counterSummary(counters.resultExtraction.elementCount), "count"),
 			evidenceField("result_extraction_entrypoint", "helix::Context::reduced_density")
 		},
-		"runner wall-clock timing around final reduced-density extraction with CUDA sync boundaries",
-		"Result extraction time is captured; D2H byte attribution remains a future internal counter.",
-		"Split reduced-density copy bytes and host allocation cost in the backend redesign harness."
+		"internal ResultExtractor substage counters captured by the private backend profiling sink",
+		"Result extraction is split into sync wait, host allocation, D2H copy, conversion, bytes, and element count.",
+		"Use the substage distribution to decide whether final-state extraction needs buffer/layout changes."
 	});
 	slots.push_back({
 		"H-003",
@@ -267,6 +399,10 @@ inline std::vector<BenchmarkHypothesisEvidence> defaultProfilingEvidenceSlots(co
 		"inconclusive",
 		{
 			evidenceField("runner_phase_boundary_sync_count", "10", "count"),
+			evidenceField("internal_device_synchronize_count",
+				counterSummary(counters.sync.deviceSynchronizeCount),
+				"count"),
+			evidenceField("internal_sync_wait_ms", counterSummary(counters.sync.syncWaitMs), "ms"),
 			evidenceField("known_sync_locations",
 				"before/after init,warmup,steady_propagation,result_extraction,teardown")
 		},
@@ -290,16 +426,26 @@ inline std::vector<BenchmarkHypothesisEvidence> defaultProfilingEvidenceSlots(co
 	});
 	slots.push_back({
 		"H-005",
-		"transpose/layout hotspot",
-		"not_collected",
+		"D2D copy / transpose hotspot",
+		d2dCopyCollected ? "collected" : "not_collected",
 		{
-			evidenceField("transpose_count", "not_collected", "count"),
-			evidenceField("transpose_time_ms", "not_collected", "ms"),
+			evidenceField("transpose_count", counterSummary(counters.transpose.callCount), "count"),
+			evidenceField("transpose_time_ms", counterSummary(counters.transpose.timeMs), "ms"),
+			evidenceField("transpose_bytes", counterSummary(counters.transpose.bytes), "bytes"),
+			evidenceField("d2d_copy_count", counterSummary(counters.d2dCopy.copyCount), "count"),
+			evidenceField("d2d_copy_time_ms", counterSummary(counters.d2dCopy.timeMs), "ms"),
+			evidenceField("d2d_copy_bytes", counterSummary(counters.d2dCopy.bytes), "bytes"),
 			evidenceField("future_marker_names", "transpose_initial_rho,transpose_density_snapshot")
 		},
-		"reserved evidence slot for future internal counters or optional NVTX markers",
-		"No transpose/layout hotspot data is collected by the current runner.",
-		"Instrument transpose/layout markers in PLAN-T7 or backend redesign profiling runs."
+		d2dCopyCollected
+			? "integrator D2D copy counters captured in the steady propagation scope; transpose counters remain deferred"
+			: "reserved evidence slot for future internal counters or optional NVTX markers",
+		d2dCopyCollected
+			? "Integrator full-hierarchy copy count and bytes are collected; transpose/layout hotspot data is still deferred to PLAN-T7."
+			: "No transpose/layout hotspot data is collected by the current runner.",
+		d2dCopyCollected
+			? "Use D2D copy count/bytes to gate recurrence buffer changes; instrument transpose/layout markers in PLAN-T7."
+			: "Instrument transpose/layout markers in PLAN-T7 or backend redesign profiling runs."
 	});
 	return slots;
 }
@@ -320,7 +466,9 @@ inline BenchmarkRecord sampleLegacySpinGlassRecord()
 		record.problem.integrationOrder,
 		toString(RunStatus::Success)
 	};
-	record.profiling.hypotheses = defaultProfilingEvidenceSlots(record.timing, record.memory);
+	record.profiling.counters = sampleProfilingCounters(record.problem);
+	record.profiling.hypotheses =
+		defaultProfilingEvidenceSlots(record.timing, record.memory, record.profiling.counters);
 	return record;
 }
 
@@ -361,6 +509,75 @@ inline void requireNonNegative(std::vector<ValidationError>& errors, long long v
 	}
 }
 
+inline void validateCounterMetric(std::vector<ValidationError>& errors,
+	const BenchmarkCounterMetric& metric,
+	const std::string& path)
+{
+	if(metric.unit.empty())
+	{
+		addError(errors, path + ".unit", "counter unit is required");
+	}
+	if(metric.doubleValue.has_value() && metric.integerValue.has_value())
+	{
+		addError(errors, path, "counter must not contain both double and integer values");
+	}
+	if(metric.doubleValue.has_value())
+	{
+		requireNonNegative(errors, *metric.doubleValue, path.c_str());
+	}
+	if(metric.integerValue.has_value())
+	{
+		requireNonNegative(errors, *metric.integerValue, path.c_str());
+	}
+}
+
+inline void validateProfilingCounters(std::vector<ValidationError>& errors, const BenchmarkProfilingCounters& counters)
+{
+	validateCounterMetric(errors, counters.spmm.callCount, "profiling.counters.spmm.call_count");
+	validateCounterMetric(errors, counters.spmm.timeMs, "profiling.counters.spmm.time_ms");
+	validateCounterMetric(errors,
+		counters.spmm.descriptorCreateCount,
+		"profiling.counters.spmm.descriptor_create_count");
+	validateCounterMetric(errors,
+		counters.spmm.workspaceAllocCount,
+		"profiling.counters.spmm.workspace_alloc_count");
+	validateCounterMetric(errors, counters.spmm.workspaceBytes, "profiling.counters.spmm.workspace_bytes");
+	validateCounterMetric(errors,
+		counters.spmm.bufferSizeQueryCount,
+		"profiling.counters.spmm.buffer_size_query_count");
+
+	validateCounterMetric(errors, counters.transpose.callCount, "profiling.counters.transpose.call_count");
+	validateCounterMetric(errors, counters.transpose.timeMs, "profiling.counters.transpose.time_ms");
+	validateCounterMetric(errors, counters.transpose.bytes, "profiling.counters.transpose.bytes");
+
+	validateCounterMetric(errors, counters.d2dCopy.copyCount, "profiling.counters.d2d_copy.copy_count");
+	validateCounterMetric(errors, counters.d2dCopy.timeMs, "profiling.counters.d2d_copy.time_ms");
+	validateCounterMetric(errors, counters.d2dCopy.bytes, "profiling.counters.d2d_copy.bytes");
+
+	validateCounterMetric(errors, counters.sync.deviceSynchronizeCount,
+		"profiling.counters.sync.device_synchronize_count");
+	validateCounterMetric(errors, counters.sync.syncWaitMs, "profiling.counters.sync.sync_wait_ms");
+
+	validateCounterMetric(errors,
+		counters.resultExtraction.syncWaitMs,
+		"profiling.counters.result_extraction.sync_wait_ms");
+	validateCounterMetric(errors,
+		counters.resultExtraction.hostAllocationMs,
+		"profiling.counters.result_extraction.host_allocation_ms");
+	validateCounterMetric(errors,
+		counters.resultExtraction.d2hCopyMs,
+		"profiling.counters.result_extraction.d2h_copy_ms");
+	validateCounterMetric(errors,
+		counters.resultExtraction.conversionMs,
+		"profiling.counters.result_extraction.conversion_ms");
+	validateCounterMetric(errors,
+		counters.resultExtraction.d2hBytes,
+		"profiling.counters.result_extraction.d2h_bytes");
+	validateCounterMetric(errors,
+		counters.resultExtraction.elementCount,
+		"profiling.counters.result_extraction.element_count");
+}
+
 inline bool validate(const BenchmarkRecord& record, std::vector<ValidationError>& errors)
 {
 	errors.clear();
@@ -391,6 +608,7 @@ inline bool validate(const BenchmarkRecord& record, std::vector<ValidationError>
 	const std::vector<std::string> resultModeValues = {"FinalState", "ObservableTrace", "Trajectory"};
 	const std::vector<std::string> statusValues = {"NotStarted", "Success", "Failed"};
 	const std::vector<std::string> gateStatusValues = {"not_run", "passed", "failed"};
+	const std::vector<std::string> scopeStatusValues = {"captured", "not_captured"};
 	const std::vector<std::string> evidenceStatusValues = {
 		"not_collected", "collected", "inconclusive", "supported", "not_supported"};
 	const std::vector<std::string> requiredEvidenceIds = {"H-001", "H-002", "H-003", "H-004", "H-005"};
@@ -440,6 +658,44 @@ inline bool validate(const BenchmarkRecord& record, std::vector<ValidationError>
 		addError(errors,
 			"timing_ms.steady_propagation_scope",
 			"steady propagation must explicitly exclude init, warmup, and result extraction");
+	}
+
+	requireString(errors,
+		record.measurementScopes.mainMeasurementScope,
+		"measurement_scope.main_measurement_scope",
+		"main measurement scope is required");
+	requireString(errors,
+		record.measurementScopes.calibrationScope,
+		"measurement_scope.calibration_scope",
+		"calibration scope is required");
+	requireString(errors,
+		record.measurementScopes.nvtxNamingConvention,
+		"measurement_scope.nvtx_naming_convention",
+		"NVTX naming convention is required");
+	if(!contains(scopeStatusValues, record.measurementScopes.mainMeasurementStatus))
+	{
+		addError(errors, "measurement_scope.main_measurement_status", "main measurement status is not recognized");
+	}
+	else if(record.measurementScopes.mainMeasurementStatus != "captured")
+	{
+		addError(errors, "measurement_scope.main_measurement_status", "main measurement must be captured");
+	}
+	if(!contains(scopeStatusValues, record.measurementScopes.calibrationStatus))
+	{
+		addError(errors, "measurement_scope.calibration_status", "calibration status is not recognized");
+	}
+	else if((record.measurementScopes.calibrationStatus == "captured")
+		!= record.measurementScopes.calibrationCaptured)
+	{
+		addError(errors,
+			"measurement_scope.calibration_captured",
+			"calibration capture flag must match calibration status");
+	}
+	if(!record.measurementScopes.calibrationExcludedFromMain)
+	{
+		addError(errors,
+			"measurement_scope.calibration_excluded_from_main",
+			"calibration must be excluded from main aggregation");
 	}
 
 	requireNonNegative(errors, record.gpu.memoryTotalBytes, "gpu.memory_total_bytes");
@@ -514,6 +770,7 @@ inline bool validate(const BenchmarkRecord& record, std::vector<ValidationError>
 	{
 		addError(errors, "profiling.hypotheses", "profiling hypotheses are required");
 	}
+	validateProfilingCounters(errors, record.profiling.counters);
 
 	std::vector<std::string> seenEvidenceIds;
 	for(std::size_t i = 0; i < record.profiling.hypotheses.size(); ++i)
@@ -687,6 +944,77 @@ inline void writeHypothesisArray(std::ostream& output, const std::vector<Benchma
 	output << ']';
 }
 
+inline void writeCounterMetricValue(std::ostream& output, const BenchmarkCounterMetric& metric)
+{
+	if(metric.integerValue.has_value())
+	{
+		output << *metric.integerValue;
+	}
+	else if(metric.doubleValue.has_value())
+	{
+		output << *metric.doubleValue;
+	}
+	else
+	{
+		output << jsonString("not_collected");
+	}
+}
+
+inline void writeNamedCounterMetric(std::ostream& output,
+	const char* name,
+	const BenchmarkCounterMetric& metric,
+	bool first)
+{
+	if(!first)
+	{
+		output << ',';
+	}
+	output << jsonString(name) << ':';
+	writeCounterMetricValue(output, metric);
+}
+
+inline void writeProfilingCounters(std::ostream& output, const BenchmarkProfilingCounters& counters)
+{
+	output << '{';
+
+	output << "\"spmm\":{";
+	writeNamedCounterMetric(output, "call_count", counters.spmm.callCount, true);
+	writeNamedCounterMetric(output, "time_ms", counters.spmm.timeMs, false);
+	writeNamedCounterMetric(output, "descriptor_create_count", counters.spmm.descriptorCreateCount, false);
+	writeNamedCounterMetric(output, "workspace_alloc_count", counters.spmm.workspaceAllocCount, false);
+	writeNamedCounterMetric(output, "workspace_bytes", counters.spmm.workspaceBytes, false);
+	writeNamedCounterMetric(output, "buffer_size_query_count", counters.spmm.bufferSizeQueryCount, false);
+	output << "},";
+
+	output << "\"transpose\":{";
+	writeNamedCounterMetric(output, "call_count", counters.transpose.callCount, true);
+	writeNamedCounterMetric(output, "time_ms", counters.transpose.timeMs, false);
+	writeNamedCounterMetric(output, "bytes", counters.transpose.bytes, false);
+	output << "},";
+
+	output << "\"d2d_copy\":{";
+	writeNamedCounterMetric(output, "copy_count", counters.d2dCopy.copyCount, true);
+	writeNamedCounterMetric(output, "time_ms", counters.d2dCopy.timeMs, false);
+	writeNamedCounterMetric(output, "bytes", counters.d2dCopy.bytes, false);
+	output << "},";
+
+	output << "\"sync\":{";
+	writeNamedCounterMetric(output, "device_synchronize_count", counters.sync.deviceSynchronizeCount, true);
+	writeNamedCounterMetric(output, "sync_wait_ms", counters.sync.syncWaitMs, false);
+	output << "},";
+
+	output << "\"result_extraction\":{";
+	writeNamedCounterMetric(output, "sync_wait_ms", counters.resultExtraction.syncWaitMs, true);
+	writeNamedCounterMetric(output, "host_allocation_ms", counters.resultExtraction.hostAllocationMs, false);
+	writeNamedCounterMetric(output, "d2h_copy_ms", counters.resultExtraction.d2hCopyMs, false);
+	writeNamedCounterMetric(output, "conversion_ms", counters.resultExtraction.conversionMs, false);
+	writeNamedCounterMetric(output, "d2h_bytes", counters.resultExtraction.d2hBytes, false);
+	writeNamedCounterMetric(output, "element_count", counters.resultExtraction.elementCount, false);
+	output << "}";
+
+	output << '}';
+}
+
 inline std::string toJsonLine(const BenchmarkRecord& record)
 {
 	std::ostringstream output;
@@ -745,6 +1073,16 @@ inline std::string toJsonLine(const BenchmarkRecord& record)
 		   << "\"steady_propagation_scope\":" << jsonString(record.timing.steadyPropagationScope) << ','
 		   << "\"result_extraction\":" << record.timing.resultExtraction << ','
 		   << "\"teardown\":" << record.timing.teardown << "},"
+		   << "\"measurement_scope\":{"
+		   << "\"main_measurement_scope\":" << jsonString(record.measurementScopes.mainMeasurementScope) << ','
+		   << "\"main_measurement_status\":" << jsonString(record.measurementScopes.mainMeasurementStatus) << ','
+		   << "\"calibration_scope\":" << jsonString(record.measurementScopes.calibrationScope) << ','
+		   << "\"calibration_status\":" << jsonString(record.measurementScopes.calibrationStatus) << ','
+		   << "\"calibration_captured\":" << jsonBool(record.measurementScopes.calibrationCaptured) << ','
+		   << "\"calibration_excluded_from_main\":"
+		   << jsonBool(record.measurementScopes.calibrationExcludedFromMain) << ','
+		   << "\"nvtx_naming_convention\":"
+		   << jsonString(record.measurementScopes.nvtxNamingConvention) << "},"
 		   << "\"memory\":{"
 		   << "\"peak_device_bytes\":" << record.memory.peakDeviceBytes << ','
 		   << "\"device_delta_bytes\":" << record.memory.deviceDeltaBytes << ','
@@ -785,6 +1123,8 @@ inline std::string toJsonLine(const BenchmarkRecord& record)
 	{
 		output << "null";
 	}
+	output << ",\"counters\":";
+	writeProfilingCounters(output, record.profiling.counters);
 	output << ",\"hypotheses\":";
 	writeHypothesisArray(output, record.profiling.hypotheses);
 	output << "},"

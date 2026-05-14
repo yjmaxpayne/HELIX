@@ -123,9 +123,12 @@ ncu \
 The naming convention is `nsight/<run_id>-systems.*` and `nsight/<run_id>-compute.*`.
 `profiling.nsight_artifact` is `null` when no capture is collected, and the generated Markdown
 summary renders that state as `not_collected`. If a future opt-in build/run adds NVTX markers, reuse
-these names and evidence mappings: `helix.develop` for H-003, `helix.getdRhoSparse` for H-001/H-003,
-`helix.cusparseSpMM.wrapper` for H-001/H-004, `helix.transpose` for H-005, and
-`helix.result_extraction` for H-002.
+the benchmark scope names recorded in `measurement_scope.nvtx_naming_convention`:
+`benchmark.main.init`, `benchmark.main.warmup`, `benchmark.main.steady_propagation`,
+`benchmark.main.result_extraction`, `benchmark.main.teardown`, and `benchmark.calibration`.
+Future internal markers should keep these evidence mappings: `helix.develop` for H-003,
+`helix.getdRhoSparse` for H-001/H-003, `helix.cuda_sparse_backend_plan` for H-001/H-004,
+`helix.transpose` for H-005, and `helix.result_extraction` for H-002.
 
 When the example script runs with `HELIX_BENCHMARK_WITH_NSIGHT=systems`, it sets
 `HELIX_BENCHMARK_NSIGHT_ARTIFACT=nsight/<run_id>-systems.nsys-rep` so the JSONL and Markdown summary
@@ -135,6 +138,9 @@ When correctness or baseline gates are run separately in the same validation ses
 `HELIX_BENCHMARK_CORRECTNESS_GATE_STATUS=passed|failed` and
 `HELIX_BENCHMARK_BASELINE_GATE_STATUS=passed|failed` before invoking the benchmark. Standalone
 benchmark runs must leave those fields at the default `not_run`.
+Use `HELIX_BENCHMARK_CAPTURE_CALIBRATION=0` for a main-only artifact, or leave it at the default
+`1` to run the separate HEOMSolver calibration cross-check. In both cases calibration is excluded
+from main timing aggregation.
 
 No Nsight workflow runs on the default pull-request path. A future workflow must use
 `workflow_dispatch` or a scheduled trigger. Raw profiler reports must not be committed; if a workflow
@@ -154,21 +160,47 @@ with these top-level fields:
   "case": {"name": "legacy_spin_glass_default", "backend": "LegacyCudaSparse", "precision": "single"},
   "problem": {"N": 1024, "KMax": 2, "JMax": 3, "hierarchy_size": 10, "steps": 2},
   "timing_ms": {"init": 0.0, "warmup": 0.0, "steady_propagation": 0.0, "result_extraction": 0.0, "teardown": 0.0},
+  "measurement_scope": {
+    "main_measurement_scope": "benchmark.main",
+    "main_measurement_status": "captured",
+    "calibration_scope": "benchmark.calibration",
+    "calibration_status": "captured",
+    "calibration_captured": true,
+    "calibration_excluded_from_main": true,
+    "nvtx_naming_convention": "benchmark.main.init,benchmark.main.warmup,benchmark.main.steady_propagation,benchmark.main.result_extraction,benchmark.main.teardown,benchmark.calibration"
+  },
   "memory": {"peak_device_bytes": 0, "device_delta_bytes": 0, "measurement_method": "cudaMemGetInfo_delta"},
   "gates": {"correctness_gate_status": "not_run", "baseline_gate_status": "not_run"},
   "profiling": {
     "instrumentation": ["runner_wall_clock", "cudaDeviceSynchronize_phase_boundaries"],
     "nvtx_enabled": false,
     "nsight_artifact": null,
+    "counters": {
+      "spmm": {
+        "call_count": 320,
+        "descriptor_create_count": 0,
+        "workspace_alloc_count": 0,
+        "workspace_bytes": 183,
+        "buffer_size_query_count": 0
+      },
+      "result_extraction": {
+        "sync_wait_ms": 0.0,
+        "host_allocation_ms": 0.0,
+        "d2h_copy_ms": 0.0,
+        "conversion_ms": 0.0,
+        "d2h_bytes": 8388608,
+        "element_count": 1048576
+      }
+    },
     "hypotheses": [
       {
         "id": "H-001",
         "name": "descriptor/workspace rebuild cost",
-        "status": "inconclusive",
-        "fields": [{"name": "context_init_ms", "value": "0.000", "unit": "ms"}],
-        "method": "runner wall-clock timing around helix::Context construction with CUDA sync boundaries",
-        "interpretation": "Context init timing is available as a P0 proxy.",
-        "downstream_action": "Add internal descriptor/workspace counters before backend redesign comparison."
+        "status": "collected",
+        "fields": [{"name": "spmm_call_count", "value": "320", "unit": "count"}],
+        "method": "private CudaSparseBackendPlan SpMM counters captured in the steady propagation scope after warmup",
+        "interpretation": "Descriptor creation, workspace allocation, buffer-size query, and SpMM call counters are separated from aggregate timing; warmed compatible calls should report zero setup counters.",
+        "downstream_action": "Use these counters to gate downstream H-diagonal, D2D traffic, layout, and graph feasibility tasks."
       }
     ]
   }
@@ -177,11 +209,14 @@ with these top-level fields:
 
 `helix_benchmark_summary.md` is the human-readable release/PR handoff generated from the same record.
 It includes the schema version, artifact paths, run environment, case metadata, phase timing table,
-memory table, correctness/baseline gate status, structured profiling evidence slots for H-001..H-005,
-and a short release-note snippet. Each hypothesis records `id`, `name`, `status`, `fields`, `method`,
-`interpretation`, and `downstream_action`. Allowed evidence statuses are `not_collected`, `collected`,
-`inconclusive`, `supported`, and `not_supported`; missing counters must use `not_collected` rather
-than a blank field.
+measurement scope table, memory table, correctness/baseline gate status, profiling counter table,
+CUDA 13 cuSPARSE API decision table, structural legacy-wrapper versus reusable-plan comparison,
+`H_DIAGONAL` elementwise specialization comparison,
+structured profiling evidence slots for H-001..H-005, and a short release-note snippet. Each
+hypothesis records `id`,
+`name`, `status`, `fields`, `method`, `interpretation`, and `downstream_action`. Allowed evidence
+statuses are `not_collected`, `collected`, `inconclusive`, `supported`, and `not_supported`; missing
+counters must use `not_collected` rather than a blank field.
 
 `examples/outputEnergy.txt` is still the checked-in numerical correctness baseline. Do not compare it
 to benchmark JSONL or use benchmark artifacts as a replacement for numerical or baseline gates.

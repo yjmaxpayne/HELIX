@@ -44,6 +44,7 @@ set_target_properties(helix_host_core PROPERTIES
 
 add_library(helix_core STATIC
     src/helix.cpp
+    src/library/backend_profiling.cpp
     src/library/energy_observable.cpp
     src/library/legacy_runtime_session.cu
     src/library/result_extractor.cu
@@ -51,6 +52,7 @@ add_library(helix_core STATIC
     src/psd/eigenvalues.cu
     src/psd/psd.cu
     src/initialize.cu
+    src/cuda_sparse_backend_plan.cu
     src/liouville.cu
     src/matrix_storage.cu
     src/matrix_util.cu
@@ -433,6 +435,10 @@ if(HELIX_BUILD_TESTS)
         CUDA::cudart
     )
 
+    target_include_directories(legacy_spin_glass_benchmark PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+
     target_compile_definitions(legacy_spin_glass_benchmark PRIVATE
         HELIX_BENCHMARK_BUILD_TYPE="${HELIX_BENCHMARK_BUILD_TYPE}"
         HELIX_BENCHMARK_CUDA_ARCHITECTURES="${HELIX_CUDA_ARCHITECTURES}"
@@ -750,6 +756,40 @@ if(HELIX_BUILD_TESTS)
         TIMEOUT 60
     )
 
+    add_executable(diagonal_hamiltonian_commutator_cuda_tests
+        tests/cuda/diagonal_hamiltonian_commutator_tests.cu
+        src/cuda_sparse_backend_plan.cu
+        src/library/backend_profiling.cpp
+        src/liouville.cu
+        src/matrix_storage.cu
+        src/matrix_util.cu
+    )
+
+    target_link_libraries(diagonal_hamiltonian_commutator_cuda_tests PRIVATE
+        helix_host_core
+        helix_test_support
+        CUDA::cublas
+        CUDA::cusparse
+    )
+
+    target_include_directories(diagonal_hamiltonian_commutator_cuda_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+
+    set_target_properties(diagonal_hamiltonian_commutator_cuda_tests PROPERTIES
+        CUDA_ARCHITECTURES "${HELIX_CUDA_ARCHITECTURES}"
+        CUDA_SEPARABLE_COMPILATION ON
+        CUDA_RESOLVE_DEVICE_SYMBOLS ON
+    )
+
+    helix_add_test(
+        NAME diagonal_hamiltonian_commutator_cuda_tests
+        TARGET diagonal_hamiltonian_commutator_cuda_tests
+        LABELS cuda
+        GPU
+        TIMEOUT 60
+    )
+
     helix_add_test(
         NAME helix_cuda_memcheck_sanitizer
         COMMAND
@@ -767,6 +807,8 @@ if(HELIX_BUILD_TESTS)
 
     add_executable(cusparse_wrapper_cuda_tests
         tests/cuda/cusparse_wrapper_tests.cu
+        src/cuda_sparse_backend_plan.cu
+        src/library/backend_profiling.cpp
     )
 
     target_link_libraries(cusparse_wrapper_cuda_tests PRIVATE
@@ -792,6 +834,8 @@ if(HELIX_BUILD_TESTS)
 
     add_executable(sparse_drho_reference_tests
         tests/numerical/sparse_drho_reference_tests.cu
+        src/cuda_sparse_backend_plan.cu
+        src/library/backend_profiling.cpp
         src/initialize.cu
         src/liouville.cu
         src/matrix_storage.cu
@@ -825,6 +869,8 @@ if(HELIX_BUILD_TESTS)
 
     add_executable(one_step_evolution_tests
         tests/numerical/one_step_evolution_tests.cu
+        src/cuda_sparse_backend_plan.cu
+        src/library/backend_profiling.cpp
         src/initialize.cu
         src/liouville.cu
         src/matrix_storage.cu
@@ -858,6 +904,8 @@ if(HELIX_BUILD_TESTS)
 
     add_executable(heom_lifecycle_contract_tests
         tests/numerical/heom_lifecycle_contract_tests.cu
+        src/cuda_sparse_backend_plan.cu
+        src/library/backend_profiling.cpp
         src/initialize.cu
         src/liouville.cu
         src/matrix_storage.cu
