@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "helix-docs"
-version = "0.0.1"
+version = "0.0.3"
 description = "Documentation environment for HELIX."
 requires-python = ">=3.11"
 readme = "README.md"

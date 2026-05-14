@@ -1,7 +1,7 @@
-[OUTPUT] 
+[OUTPUT]
 Internal ctest changing into directory: /home/yjmaxpayne/Dev/HELIX/build/cmake
 
-[HANDLER_OUTPUT] 
+[HANDLER_OUTPUT]
 Test project /home/yjmaxpayne/Dev/HELIX/build/cmake
 
     Start 6: v003_legacy_spin_glass_benchmark_gate

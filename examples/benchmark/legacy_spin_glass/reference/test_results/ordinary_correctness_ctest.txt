@@ -1,7 +1,7 @@
-[OUTPUT] 
+[OUTPUT]
 Internal ctest changing into directory: /home/yjmaxpayne/Dev/HELIX/build/cmake
 
-[HANDLER_OUTPUT] 
+[HANDLER_OUTPUT]
 Test project /home/yjmaxpayne/Dev/HELIX/build/cmake
 
       Start  1: v01_public_header_compile_gate

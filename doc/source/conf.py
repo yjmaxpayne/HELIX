@@ -31,7 +31,7 @@ def _get_doc_version() -> str:
 
         return Version.from_git().serialize(style=Style.Pep440)
     except Exception:
-        return "0.0.1"
+        return "0.0.3"
 
 
 version = _get_doc_version()
