@@ -73,6 +73,7 @@ void setBackendProfilingEnabled(bool enabled) noexcept;
 void resetBackendProfilingCounters() noexcept;
 BackendProfilingCounters snapshotBackendProfilingCounters();
 void recordSpmmProfiling(const BackendSpmmProfilingCounters& counters) noexcept;
+void recordTransposeProfiling(const BackendTransposeProfilingCounters& counters) noexcept;
 void recordD2DCopyProfiling(const BackendD2DCopyProfilingCounters& counters) noexcept;
 void recordResultExtractionProfiling(const BackendResultExtractionProfilingCounters& counters) noexcept;
 

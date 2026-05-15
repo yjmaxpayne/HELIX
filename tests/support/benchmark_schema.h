@@ -233,6 +233,117 @@ struct BenchmarkRecord {
 	std::string notes;
 };
 
+struct BenchmarkMetricStats {
+	std::size_t count = 0;
+	double minimum = 0.0;
+	double maximum = 0.0;
+	double median = 0.0;
+	double sampleStddev = 0.0;
+};
+
+enum class BenchmarkBeforeAfterConclusion {
+	OverallImproved,
+	OverallRegressed,
+	WithinNoise,
+	InconclusiveDueToVarianceOrBuildMismatch
+};
+
+inline const char* toString(BenchmarkBeforeAfterConclusion conclusion) noexcept
+{
+	switch(conclusion)
+	{
+	case BenchmarkBeforeAfterConclusion::OverallImproved:
+		return "overall_improved";
+	case BenchmarkBeforeAfterConclusion::OverallRegressed:
+		return "overall_regressed";
+	case BenchmarkBeforeAfterConclusion::WithinNoise:
+		return "within_noise";
+	case BenchmarkBeforeAfterConclusion::InconclusiveDueToVarianceOrBuildMismatch:
+		return "inconclusive_due_to_variance_or_build_mismatch";
+	}
+	return "inconclusive_due_to_variance_or_build_mismatch";
+}
+
+inline BenchmarkMetricStats summarizeBenchmarkSamples(std::vector<double> samples)
+{
+	BenchmarkMetricStats stats;
+	stats.count = samples.size();
+	if(samples.empty())
+	{
+		return stats;
+	}
+
+	std::sort(samples.begin(), samples.end());
+	stats.minimum = samples.front();
+	stats.maximum = samples.back();
+	const std::size_t middle = samples.size() / 2;
+	if(samples.size() % 2 == 0)
+	{
+		stats.median = (samples[middle - 1] + samples[middle]) / 2.0;
+	}
+	else
+	{
+		stats.median = samples[middle];
+	}
+
+	double sum = 0.0;
+	for(double sample : samples)
+	{
+		sum += sample;
+	}
+	const double mean = sum / static_cast<double>(samples.size());
+	double squaredDeviationSum = 0.0;
+	for(double sample : samples)
+	{
+		const double deviation = sample - mean;
+		squaredDeviationSum += deviation * deviation;
+	}
+	stats.sampleStddev = samples.size() > 1
+		? std::sqrt(squaredDeviationSum / static_cast<double>(samples.size() - 1))
+		: 0.0;
+	return stats;
+}
+
+inline double benchmarkMainTotalMs(const BenchmarkTiming& timing)
+{
+	return timing.init + timing.warmup + timing.steadyPropagation
+		+ timing.resultExtraction + timing.teardown;
+}
+
+inline double steadyPropagationMsPerStep(const BenchmarkRecord& record)
+{
+	if(record.problem.steadySteps == 0)
+	{
+		return 0.0;
+	}
+	return record.timing.steadyPropagation / static_cast<double>(record.problem.steadySteps);
+}
+
+inline BenchmarkBeforeAfterConclusion classifyBenchmarkPostPreRatio(double postPreRatio,
+	double relativeNoise,
+	bool comparableBuild)
+{
+	if(!comparableBuild
+		|| !std::isfinite(postPreRatio)
+		|| !std::isfinite(relativeNoise)
+		|| postPreRatio <= 0.0
+		|| relativeNoise >= 0.10)
+	{
+		return BenchmarkBeforeAfterConclusion::InconclusiveDueToVarianceOrBuildMismatch;
+	}
+
+	const double noiseBand = std::max(0.02, relativeNoise * 2.0);
+	if(std::abs(postPreRatio - 1.0) <= noiseBand)
+	{
+		return BenchmarkBeforeAfterConclusion::WithinNoise;
+	}
+	if(postPreRatio < 1.0)
+	{
+		return BenchmarkBeforeAfterConclusion::OverallImproved;
+	}
+	return BenchmarkBeforeAfterConclusion::OverallRegressed;
+}
+
 inline const char* toString(Backend backend) noexcept
 {
 	switch(backend)
@@ -356,8 +467,45 @@ inline std::vector<BenchmarkHypothesisEvidence> defaultProfilingEvidenceSlots(co
 	const BenchmarkProfilingCounters& counters)
 {
 	std::vector<BenchmarkHypothesisEvidence> slots;
+	const bool transposeCollected =
+		counters.transpose.callCount.collected()
+		|| counters.transpose.timeMs.collected()
+		|| counters.transpose.bytes.collected();
 	const bool d2dCopyCollected =
 		counters.d2dCopy.copyCount.collected() || counters.d2dCopy.bytes.collected();
+	const bool layoutHotspotCollected = transposeCollected || d2dCopyCollected;
+	std::string h005Method =
+		"reserved evidence slot for future internal counters or optional NVTX markers";
+	std::string h005Interpretation =
+		"No transpose/layout hotspot data is collected by the current runner.";
+	std::string h005DownstreamAction =
+		"Instrument transpose/layout markers in PLAN-T7 or backend redesign profiling runs.";
+	if(transposeCollected && d2dCopyCollected)
+	{
+		h005Method =
+			"transpose wrapper counters and integrator D2D copy counters captured in the steady propagation scope; transpose timing remains not_collected unless measured without adding stream synchronization";
+		h005Interpretation =
+			"Physical transpose call count/bytes and integrator full-hierarchy D2D count/bytes are collected; transpose time is intentionally deferred to avoid adding synchronization to the production path.";
+		h005DownstreamAction =
+			"Use the collected counts/bytes and layout option matrix to keep public row-major order while deferring descriptor-order rewrites to a separate correctness gate.";
+	}
+	else if(transposeCollected)
+	{
+		h005Method =
+			"transpose wrapper counters captured in the steady propagation scope; transpose timing remains not_collected unless measured without adding stream synchronization";
+		h005Interpretation =
+			"Physical transpose call count/bytes are collected; transpose time is intentionally deferred to avoid adding synchronization to the production path.";
+		h005DownstreamAction =
+			"Use the collected transpose counts/bytes to gate layout decisions and defer timing to Nsight or event-based profiling work.";
+	}
+	else if(d2dCopyCollected)
+	{
+		h005Method = "integrator D2D copy counters captured in the steady propagation scope; transpose counters remain deferred";
+		h005Interpretation =
+			"Integrator full-hierarchy copy count and bytes are collected; transpose/layout hotspot data is still deferred to PLAN-T7.";
+		h005DownstreamAction =
+			"Use D2D copy count/bytes to gate recurrence buffer changes; instrument transpose/layout markers in PLAN-T7.";
+	}
 	slots.push_back({
 		"H-001",
 		"descriptor/workspace rebuild cost",
@@ -369,11 +517,14 @@ inline std::vector<BenchmarkHypothesisEvidence> defaultProfilingEvidenceSlots(co
 			evidenceField("buffer_size_query_count", counterSummary(counters.spmm.bufferSizeQueryCount), "count"),
 			evidenceField("workspace_alloc_count", counterSummary(counters.spmm.workspaceAllocCount), "count"),
 			evidenceField("workspace_bytes", counterSummary(counters.spmm.workspaceBytes), "bytes"),
-			evidenceField("spmm_time_ms", counterSummary(counters.spmm.timeMs), "ms")
+			evidenceField("spmm_time_ms", counterSummary(counters.spmm.timeMs), "ms"),
+			evidenceField("structured_v_specialization_decision", "defer_legacy_spin_glass_only"),
+			evidenceField("structured_v_generic_sparse_contract",
+				"unaffected:System::from_sparse_validation_only")
 		},
 		"private CudaSparseBackendPlan SpMM counters captured in the steady propagation scope after warmup",
-		"Descriptor creation, workspace allocation, buffer-size query, and SpMM call counters are separated from aggregate timing; warmed compatible calls should report zero setup counters.",
-		"Use these counters to gate downstream H-diagonal, D2D traffic, layout, and graph feasibility tasks."
+		"Descriptor creation, workspace allocation, buffer-size query, and SpMM call counters are separated from aggregate timing; warmed compatible calls should report zero setup counters. Structured V replacement remains deferred as a legacy spin-glass-only kernel decision, not a generic sparse contract.",
+		"Keep System::from_sparse() validation-only unchanged; revisit structured V only behind a private legacy adapter with reference-kernel, benchmark, and baseline gates."
 	});
 	slots.push_back({
 		"H-002",
@@ -404,11 +555,15 @@ inline std::vector<BenchmarkHypothesisEvidence> defaultProfilingEvidenceSlots(co
 				"count"),
 			evidenceField("internal_sync_wait_ms", counterSummary(counters.sync.syncWaitMs), "ms"),
 			evidenceField("known_sync_locations",
-				"before/after init,warmup,steady_propagation,result_extraction,teardown")
+				"before/after init,warmup,steady_propagation,result_extraction,teardown"),
+			evidenceField("sync_audit_sites",
+				"measureCudaPhase,LegacyRuntimeSession::run_steps,develop,getdRhoSparse,clearLiouvilleStorage"),
+			evidenceField("event_replacement_plan", "required_before_removing_sync"),
+			evidenceField("cuda_graph_decision", "defer_fixed_shape_capture")
 		},
-		"explicit runner cudaDeviceSynchronize calls around each measured phase",
-		"Runner sync boundaries are known, but internal library synchronization is not independently counted.",
-		"Replace device-wide timing fences with stream/event timing where redesign experiments need overlap evidence."
+		"explicit runner cudaDeviceSynchronize calls around each measured phase plus static audit of production synchronization sites",
+		"Production hot-path synchronizations remain correctness and error boundaries; replacing them requires explicit stream/event dependencies before fixed-shape graph capture is credible.",
+		"Implement and test event dependencies for develop/getdRhoSparse first, then run a dedicated CUDA Graph capture spike."
 	});
 	slots.push_back({
 		"H-004",
@@ -427,7 +582,7 @@ inline std::vector<BenchmarkHypothesisEvidence> defaultProfilingEvidenceSlots(co
 	slots.push_back({
 		"H-005",
 		"D2D copy / transpose hotspot",
-		d2dCopyCollected ? "collected" : "not_collected",
+		layoutHotspotCollected ? "collected" : "not_collected",
 		{
 			evidenceField("transpose_count", counterSummary(counters.transpose.callCount), "count"),
 			evidenceField("transpose_time_ms", counterSummary(counters.transpose.timeMs), "ms"),
@@ -437,15 +592,9 @@ inline std::vector<BenchmarkHypothesisEvidence> defaultProfilingEvidenceSlots(co
 			evidenceField("d2d_copy_bytes", counterSummary(counters.d2dCopy.bytes), "bytes"),
 			evidenceField("future_marker_names", "transpose_initial_rho,transpose_density_snapshot")
 		},
-		d2dCopyCollected
-			? "integrator D2D copy counters captured in the steady propagation scope; transpose counters remain deferred"
-			: "reserved evidence slot for future internal counters or optional NVTX markers",
-		d2dCopyCollected
-			? "Integrator full-hierarchy copy count and bytes are collected; transpose/layout hotspot data is still deferred to PLAN-T7."
-			: "No transpose/layout hotspot data is collected by the current runner.",
-		d2dCopyCollected
-			? "Use D2D copy count/bytes to gate recurrence buffer changes; instrument transpose/layout markers in PLAN-T7."
-			: "Instrument transpose/layout markers in PLAN-T7 or backend redesign profiling runs."
+		h005Method,
+		h005Interpretation,
+		h005DownstreamAction
 	});
 	return slots;
 }

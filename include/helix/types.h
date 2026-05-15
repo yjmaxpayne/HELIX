@@ -32,6 +32,8 @@ enum class ResultMode {
 };
 
 enum class MatrixStorageOrder {
+	// Public reduced_density buffers are row-major. Backend-local layout changes
+	// must convert before publishing RunResult values.
 	RowMajor
 };
 

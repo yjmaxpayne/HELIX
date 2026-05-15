@@ -19,6 +19,7 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <sstream>
@@ -29,8 +30,8 @@
 
 namespace {
 
-constexpr std::size_t kWarmupSteps = 1;
-constexpr std::size_t kSteadySteps = 1;
+constexpr std::size_t kDefaultWarmupSteps = 1;
+constexpr std::size_t kDefaultSteadySteps = 1;
 constexpr int kDevice = 0;
 
 struct UtcTimestamp
@@ -211,6 +212,41 @@ bool envBoolOrDefault(const char* name, bool fallback)
 		+ ": use 1/0, true/false, yes/no, or on/off");
 }
 
+std::optional<bool> optionalBoolEnv(const char* name)
+{
+	const auto value = optionalEnv(name);
+	if(!value.has_value())
+	{
+		return std::nullopt;
+	}
+	return envBoolOrDefault(name, false);
+}
+
+std::size_t positiveSizeEnvOrDefault(const char* name, std::size_t fallback)
+{
+	const auto value = optionalEnv(name);
+	if(!value.has_value())
+	{
+		return fallback;
+	}
+
+	if(value->front() == '-' || value->front() == '+')
+	{
+		throw std::runtime_error(std::string("unsupported step count for ") + name
+			+ ": use a positive integer");
+	}
+	std::size_t parsedCharacters = 0;
+	const unsigned long long parsed = std::stoull(*value, &parsedCharacters);
+	if(parsedCharacters != value->size()
+		|| parsed == 0
+		|| parsed > static_cast<unsigned long long>(std::numeric_limits<std::size_t>::max()))
+	{
+		throw std::runtime_error(std::string("unsupported step count for ") + name
+			+ ": use a positive integer");
+	}
+	return static_cast<std::size_t>(parsed);
+}
+
 bool cusparseReusePlanEnabledFromEnv()
 {
 	const auto value = optionalEnv("HELIX_CUSPARSE_REUSE_PLAN");
@@ -282,7 +318,9 @@ MeasurementResult makeMainMeasurementResult(const helix::ContextOptions& options
 	return result;
 }
 
-void validateCalibration(const std::vector<std::complex<double>>& directDensity, const helix::RunResult& result)
+void validateCalibration(const std::vector<std::complex<double>>& directDensity,
+	const helix::RunResult& result,
+	std::size_t totalSteps)
 {
 	require(result.ok(), std::string("HEOMSolver calibration failed: ") + result.diagnostics.summary());
 	require(result.reduced_density_shape.count == 1, "HEOMSolver calibration must return one final state");
@@ -297,7 +335,7 @@ void validateCalibration(const std::vector<std::complex<double>>& directDensity,
 		"Context reduced_density size must match HEOMSolver RunResult size");
 	require(result.diagnostics.status == helix::RunStatus::Success,
 		"HEOMSolver calibration diagnostics must report success");
-	require(result.diagnostics.steps == kWarmupSteps + kSteadySteps,
+	require(result.diagnostics.steps == totalSteps,
 		"HEOMSolver calibration diagnostics must mirror benchmark steps");
 }
 
@@ -369,6 +407,8 @@ helix::test::benchmark::BenchmarkRecord makeRecord(const UtcTimestamp& timestamp
 	const helix::Bath& bath,
 	const helix::HierarchySpec& hierarchy,
 	const MeasurementResult& mainMeasurement,
+	std::size_t warmupSteps,
+	std::size_t steadySteps,
 	bool calibrationCaptured,
 	const helix::test::benchmark::BenchmarkTiming& timing,
 	const helix::test::benchmark::BenchmarkMemory& memory,
@@ -383,12 +423,13 @@ helix::test::benchmark::BenchmarkRecord makeRecord(const UtcTimestamp& timestamp
 	record.timestampUtc = timestamp.iso;
 	record.helix.version = helix::versionString();
 	record.helix.versionSource = helix::versionSource();
-	record.helix.gitCommit = "unknown";
+	record.helix.gitCommit = envOrDefault("HELIX_BENCHMARK_GIT_COMMIT", "unknown");
+	record.helix.gitDirty = optionalBoolEnv("HELIX_BENCHMARK_GIT_DIRTY");
 	record.build.type = HELIX_BENCHMARK_BUILD_TYPE;
 	record.build.cudaArchitectures = HELIX_BENCHMARK_CUDA_ARCHITECTURES;
 	record.build.compiler = HELIX_BENCHMARK_COMPILER;
 	record.host.os = "linux";
-	record.host.runner = "ctest_or_manual";
+	record.host.runner = envOrDefault("HELIX_BENCHMARK_HOST_RUNNER", "ctest_or_manual");
 	record.gpu.name = deviceProperties.name;
 	record.gpu.device = kDevice;
 	record.gpu.driver = cudaVersionString(driverVersion);
@@ -405,9 +446,9 @@ helix::test::benchmark::BenchmarkRecord makeRecord(const UtcTimestamp& timestamp
 	record.problem.hierarchySize = mainMeasurement.diagnostics.hierarchySize;
 	record.problem.timeStep = mainMeasurement.diagnostics.timeStep;
 	record.problem.integrationOrder = mainMeasurement.diagnostics.integrationOrder;
-	record.problem.steps = kWarmupSteps + kSteadySteps;
-	record.problem.warmupSteps = kWarmupSteps;
-	record.problem.steadySteps = kSteadySteps;
+	record.problem.steps = warmupSteps + steadySteps;
+	record.problem.warmupSteps = warmupSteps;
+	record.problem.steadySteps = steadySteps;
 	record.timing = timing;
 	record.measurementScopes.calibrationCaptured = calibrationCaptured;
 	record.measurementScopes.calibrationStatus = calibrationCaptured ? "captured" : "not_captured";
@@ -476,6 +517,12 @@ void printSummary(const helix::test::benchmark::BenchmarkRecord& record, const M
 			  << helix::test::benchmark::counterSummary(record.profiling.counters.spmm.workspaceBytes)
 			  << " profiling.spmm.buffer_size_query_count="
 			  << helix::test::benchmark::counterSummary(record.profiling.counters.spmm.bufferSizeQueryCount)
+			  << " profiling.transpose.call_count="
+			  << helix::test::benchmark::counterSummary(record.profiling.counters.transpose.callCount)
+			  << " profiling.transpose.time_ms="
+			  << helix::test::benchmark::counterSummary(record.profiling.counters.transpose.timeMs)
+			  << " profiling.transpose.bytes="
+			  << helix::test::benchmark::counterSummary(record.profiling.counters.transpose.bytes)
 			  << " profiling.d2d_copy.copy_count="
 			  << helix::test::benchmark::counterSummary(record.profiling.counters.d2dCopy.copyCount)
 			  << " profiling.d2d_copy.bytes="
@@ -596,6 +643,29 @@ std::size_t hDiagonalSpecializedSpmmCalls(const helix::test::benchmark::Benchmar
 		* problem.steadySteps;
 }
 
+std::size_t hDiagonalSpecializedPhysicalTransposeCalls(const helix::test::benchmark::BenchmarkProblem& problem)
+{
+	return hDiagonalSpecializedSpmmCalls(problem);
+}
+
+std::size_t legacySpinGlassSpinCount(const helix::test::benchmark::BenchmarkProblem& problem)
+{
+	std::size_t spins = 0;
+	std::size_t states = 1;
+	while(states < problem.hilbertSize)
+	{
+		states *= 2;
+		++spins;
+	}
+	return states == problem.hilbertSize ? spins : 0;
+}
+
+std::size_t legacySpinGlassStructuredVNonzeros(const helix::test::benchmark::BenchmarkProblem& problem)
+{
+	const std::size_t spinCount = legacySpinGlassSpinCount(problem);
+	return spinCount == 0 ? 0 : problem.hilbertSize * (spinCount + 1);
+}
+
 std::size_t complexScalarBytes(const helix::test::benchmark::BenchmarkRecord& record)
 {
 	return record.caseInfo.precision == "double" ? sizeof(double) * 2 : sizeof(float) * 2;
@@ -650,6 +720,10 @@ std::string markdownSummary(const helix::test::benchmark::BenchmarkRecord& recor
 	const std::size_t hSpmmAvoided = hDiagonalSpmmCallsAvoided(record.problem);
 	const std::size_t hTransposeAvoided = hDiagonalTransposeCallsAvoided(record.problem);
 	const std::size_t expectedSpecializedSpmmCalls = hDiagonalSpecializedSpmmCalls(record.problem);
+	const std::size_t expectedPhysicalTransposeCalls =
+		hDiagonalSpecializedPhysicalTransposeCalls(record.problem);
+	const std::size_t spinCount = legacySpinGlassSpinCount(record.problem);
+	const std::size_t structuredVNonzeros = legacySpinGlassStructuredVNonzeros(record.problem);
 	const std::size_t fullD2DBytes = fullHierarchyD2DCopyBytes(record);
 	const std::size_t expectedSwapD2DCopies = swapIntegratorD2DCopyCount(record.problem);
 	const std::size_t previousCopyBasedD2DCopies = copyBasedIntegratorD2DCopyCount(record.problem);
@@ -777,6 +851,8 @@ std::string markdownSummary(const helix::test::benchmark::BenchmarkRecord& recor
 		   << helix::test::benchmark::counterSummary(record.profiling.counters.transpose.callCount) << "` |\n"
 		   << "| transpose | time_ms | `"
 		   << helix::test::benchmark::counterSummary(record.profiling.counters.transpose.timeMs) << "` |\n"
+		   << "| transpose | bytes | `"
+		   << helix::test::benchmark::counterSummary(record.profiling.counters.transpose.bytes) << "` |\n"
 		   << "| d2d_copy | copy_count | `"
 		   << helix::test::benchmark::counterSummary(record.profiling.counters.d2dCopy.copyCount) << "` |\n"
 		   << "| d2d_copy | bytes | `"
@@ -851,6 +927,31 @@ std::string markdownSummary(const helix::test::benchmark::BenchmarkRecord& recor
 		   << expectedSpecializedSpmmCalls << "` | `"
 		   << helix::test::benchmark::counterSummary(record.profiling.counters.spmm.callCount)
 		   << "` | `" << hSpmmAvoided << "` | `" << hTransposeAvoided << "` |\n\n"
+		   << "## Structured V specialization spike decision\n\n"
+		   << "Decision: `defer_legacy_spin_glass_only`. The default legacy spin-glass `V` operator "
+			  "has a known diagonal plus single-spin-flip structure, but replacing the current "
+			  "generic sparse SpMM path with a model-specific kernel is deferred to a separate "
+			  "spike with its own reference and baseline gates.\n\n"
+		   << "| Field | Value |\n"
+		   << "| --- | --- |\n"
+		   << "| Decision | `defer_legacy_spin_glass_only` |\n"
+		   << "| Candidate scope | private default legacy spin-glass adapter only |\n"
+		   << "| Generic sparse contract | `System::from_sparse()` remains validation-only and unaffected |\n"
+		   << "| Public API expansion | rejected for v0.0.4 |\n"
+		   << "| Speed threshold | none; benchmark evidence is trend evidence only |\n"
+		   << "| Spin count inferred from N | `" << spinCount << "` |\n"
+		   << "| Structured V nnz estimate | `" << structuredVNonzeros << "` |\n"
+		   << "| Current V-path SpMM calls in steady scope | `"
+		   << helix::test::benchmark::counterSummary(record.profiling.counters.spmm.callCount)
+		   << "` |\n"
+		   << "| Current V-path physical transpose calls in steady scope | `"
+		   << helix::test::benchmark::counterSummary(record.profiling.counters.transpose.callCount)
+		   << "` |\n\n"
+		   << "Boundary: this decision does not promote arbitrary sparse HEOM runtime support. "
+			  "If structured V is revisited, it should live behind the existing private legacy "
+			  "spin-glass compatibility adapter, keep the reusable sparse plan as the generic "
+			  "fallback, and prove equivalence with CUDA reference-kernel tests plus quick and "
+			  "`HELIX_STEPS=1980` baselines.\n\n"
 		   << "## Integrator D2D recurrence comparison\n\n"
 		   << "The Taylor-like recurrence now keeps the accumulated result in a private scratch "
 			  "buffer and alternates the current recurrence state between `dRho` and the derivative "
@@ -875,6 +976,62 @@ std::string markdownSummary(const helix::test::benchmark::BenchmarkRecord& recor
 		   << "| measured_d2d_copy_bytes | `"
 		   << helix::test::benchmark::counterSummary(record.profiling.counters.d2dCopy.bytes)
 		   << "` |\n\n"
+		   << "## Layout / transpose option matrix\n\n"
+		   << "Current benchmark evidence records physical transpose call count and bytes in "
+			  "`profiling.counters.transpose`. `transpose.time_ms` intentionally remains "
+			  "`not_collected`: adding event timing inside the production wrapper would introduce "
+			  "stream synchronization pressure into the path being measured. Use Nsight or a "
+			  "separate event-timing experiment when wall-clock attribution is needed.\n\n"
+		   << "| Metric | Value |\n"
+		   << "| --- | ---: |\n"
+		   << "| transpose_call_count | `"
+		   << helix::test::benchmark::counterSummary(record.profiling.counters.transpose.callCount)
+		   << "` |\n"
+		   << "| expected_current_physical_transpose_call_count | `"
+		   << expectedPhysicalTransposeCalls << "` |\n"
+		   << "| transpose_bytes | `"
+		   << helix::test::benchmark::counterSummary(record.profiling.counters.transpose.bytes)
+		   << "` |\n"
+		   << "| transpose_time_ms | `"
+		   << helix::test::benchmark::counterSummary(record.profiling.counters.transpose.timeMs)
+		   << "` |\n"
+		   << "| transpose_time_ms_policy | `not_collected_without_extra_stream_sync` |\n\n"
+		   << "| Option | Decision | Reason | Compatibility boundary |\n"
+		   << "| --- | --- | --- | --- |\n"
+		   << "| Current physical transpose around sparse commutator outputs | adopt for v0.0.4 | It preserves the tested row-major density buffer semantics while exposing the remaining cost through counters. | Keep `transpose()` shape-safe and profiled; revisit only with small reference and baseline gates. |\n"
+		   << "| cuSPARSE dense descriptor order/opB rewrite | defer | The current reusable plan uses stable column-major descriptors plus explicit transposes; changing order/opB would couple cuSPARSE assumptions to cuBLAS accumulation and needs a dedicated reference gate. | Prototype behind a local option before replacing the production path. |\n"
+		   << "| Internal row-major density storage | adopt/retain | `dRho`, result extraction, public shape tests, and energy helpers already agree on row-major flat indexing. | Any future backend-local layout must convert at the result extraction boundary. |\n"
+		   << "| Public result order | adopt/lock | public result order remains row-major via `ReducedDensityShape::storageOrder`. | `ResultExtractor::final_reduced_density()` is the public conversion boundary. |\n"
+		   << "| Full public layout abstraction | reject for v0.0.4 | T7 only needs a backend decision and compatibility statement, not a public API expansion. | Reconsider only when multiple public storage orders are actually supported and tested. |\n\n"
+		   << "## Synchronization audit and replacement plan\n\n"
+		   << "T8 does not remove production synchronizations. Each site below keeps an explicit "
+			  "correctness and error boundary until the listed stream/event dependency is "
+			  "implemented and tested.\n\n"
+		   << "| Site | Current synchronization | Retain or replacement reason | Event/stream dependency plan | Error/debug boundary |\n"
+		   << "| --- | --- | --- | --- | --- |\n"
+		   << "| `measureCudaPhase()` | `cudaDeviceSynchronize()` before and after each measured phase (`init`, `warmup`, `steady_propagation`, `result_extraction`, `teardown`; 10 runner fences per benchmark record). | Retain in benchmark timing path so wall-clock phases are closed intervals and memory snapshots have a complete device boundary. | Use CUDA events only in a future profiling mode that does not need whole-device timing fences; keep default runner fences for release artifacts. | Benchmark runner throws immediately on CUDA errors at phase boundaries. |\n"
+		   << "| `LegacyRuntimeSession::run_steps()` | `cudaDeviceSynchronize()` after every `develop()` call. | Retain as the public `Context::run_steps()` completion and error boundary while legacy global state has no explicit stream owner. | Replace only after runtime session owns an integration stream/event and callers have an explicit completion contract. | Debug/profile mode should keep this fence or an equivalent terminal stream synchronize. |\n"
+		   << "| `develop()` | Device-wide fence after `getdRhoSparse()`, `cublasScal`, and `cublasAxpy` in each integration order. | Required today because per-hierarchy sparse streams produce the derivative while the global cuBLAS handle consumes it and later iterations may read swapped buffers. | Record completion events for sparse streams, wait on the integration/cuBLAS stream before scale/accumulate, then make sparse streams wait on the integration event before the next order. | Check CUDA status after each event wait and keep a debug sync mode for first-failure attribution. |\n"
+		   << "| `getdRhoSparse()` stage barrier | Device-wide fence between the L/V sparse commutator stage and hierarchy-coupling stage. | Phase 2 reads `buffer` and `pdRho` entries produced by other hierarchy streams; per-stream ordering alone is insufficient. | Record one event per hierarchy stream after stage 1; stage 2 waits on the producer events for each referenced hierarchy block (or a tested fan-in barrier). | Preserve a stage boundary error check before launching dependent BLAS/SpMM work. |\n"
+		   << "| `getdRhoSparse()` exit barrier | Device-wide fence after all hierarchy-coupling work. | Caller `develop()` immediately consumes `drhoVec` from a different cuBLAS stream/handle. | Record per-stream completion events and wait on the integration/cuBLAS stream before `cublasScal`/`cublasAxpy`. | Keep an explicit post-derivative error boundary in debug/profile sync mode. |\n"
+		   << "| `clearLiouvilleStorage()` | Device-wide fence at entry plus per-stream synchronizes before destroying streams/handles/descriptors. | Resource teardown must not race queued kernels, cuBLAS work, cuSPARSE descriptors, or plan-owned workspaces. | Prefer per-stream synchronize/event joins for owned streams; retain a device fence while legacy global state can queue work outside tracked streams. | Teardown remains a hard synchronization boundary. |\n\n"
+		   << "## CUDA Graph feasibility decision\n\n"
+		   << "Decision: `defer_fixed_shape_capture` for v0.0.4. Fixed-shape capture is promising "
+			  "because the default profile has stable dimensions and warmed reusable SpMM plans, "
+			  "but it should not enter production until the synchronization replacement plan above "
+			  "has a correctness gate.\n\n"
+		   << "| Constraint | Current evidence | Capture impact | Decision |\n"
+		   << "| --- | --- | --- | --- |\n"
+		   << "| Shape stability | N=`" << record.problem.hilbertSize << "`, hierarchy=`"
+		   << record.problem.hierarchySize << "`, integration_order=`"
+		   << record.problem.integrationOrder << "`, steady_steps=`" << record.problem.steadySteps
+		   << "` in this benchmark record. | Positive for fixed-shape one-step capture after warmup. | Adopt assumption for a spike only. |\n"
+		   << "| Workspace lifetime | `CudaSparseBackendPlan` owns descriptors/workspace and steady counters show descriptor creates, workspace allocations, and buffer-size queries are zero after warmup. | Positive precondition; capture must start after initialization and plan warmup. | Adopt pre-capture warmup requirement. |\n"
+		   << "| Pointer stability | `dRho`, scratch `F`/`B`, sparse buffers, and descriptor dense pointers are stable within the fixed compiled profile; `cusparseDnMatSetValues` updates values pointers before SpMM. | Promising, but captured graphs bake pointer values and update ordering. | Defer until pointer-role swap is covered by a graph replay test. |\n"
+		   << "| Preprocess / allocation APIs | `cusparseSpMM_bufferSize` is outside steady scope; `cusparseSpMM_preprocess` remains deferred. | Capture must exclude allocation, descriptor creation, and unvalidated preprocess calls. | Defer preprocess inside capture. |\n"
+		   << "| Synchronization APIs | `develop()`, `getdRhoSparse()`, `LegacyRuntimeSession::run_steps()`, and teardown still use device-wide fences. | Device synchronization is capture-hostile and hides real stream dependencies. | Blocker; implement event dependencies first. |\n"
+		   << "| Result extraction | `ResultExtractor` intentionally synchronizes before D2H copy and conversion; public order remains row-major. | Keep extraction outside propagation capture. | Capture propagation only. |\n"
+		   << "| Debug/profile mode | Current evidence relies on runner phase fences and internal sync counters. | Debug mode needs explicit error boundaries even if production replay becomes async. | Require a debug sync mode for any future graph path. |\n\n"
 		   << "Rollback switch: set `HELIX_CUSPARSE_REUSE_PLAN=0` to route sparse calls through the "
 			  "`cuda_types.h` compatibility wrappers. This is a correctness triage fallback and "
 			  "reintroduces per-call wrapper setup, so it is not a performance evidence path.\n\n"
@@ -921,8 +1078,10 @@ std::string markdownSummary(const helix::test::benchmark::BenchmarkRecord& recor
 		   << record.gates.baselineGateStatus << "`; speed threshold=`none`.\n"
 		   << "- Profiling evidence: H-001..H-005 slots are populated in `profiling.hypotheses`; "
 			  "`not_collected` marks intentionally deferred counters. CUDA 13 API decisions, "
-			  "the structural legacy-vs-reuse comparison, and the integrator D2D before-after "
-			  "comparison are recorded in this summary.\n";
+			  "the structural legacy-vs-reuse comparison, the structured V specialization "
+			  "defer decision, the integrator D2D before-after comparison, the layout/transpose "
+			  "option matrix, the synchronization audit, and the CUDA Graph feasibility decision "
+			  "are recorded in this summary.\n";
 	return output.str();
 }
 
@@ -991,7 +1150,11 @@ int main()
 		const helix::ContextOptions options = benchmarkContextOptions();
 		const helix::Bath bath = helix::Bath::drude_lorentz_pade();
 		const helix::HierarchySpec hierarchy = helix::HierarchySpec::compiled_default(bath);
-		const std::size_t totalSteps = kWarmupSteps + kSteadySteps;
+		const std::size_t warmupSteps =
+			positiveSizeEnvOrDefault("HELIX_BENCHMARK_WARMUP_STEPS", kDefaultWarmupSteps);
+		const std::size_t steadySteps =
+			positiveSizeEnvOrDefault("HELIX_BENCHMARK_STEADY_STEPS", kDefaultSteadySteps);
+		const std::size_t totalSteps = warmupSteps + steadySteps;
 		const std::string runId = timestamp.compact + "-legacy-spin-glass-sm"
 			+ std::to_string(deviceProperties.major) + std::to_string(deviceProperties.minor);
 		const auto artifacts = helix::test::benchmark::artifactPathsForRoot(
@@ -1013,12 +1176,12 @@ int main()
 			context = std::make_unique<helix::Context>(options);
 		});
 		timing.warmup = measureCudaPhase(memoryTracker, [&]() {
-			context->run_steps(kWarmupSteps);
+			context->run_steps(warmupSteps);
 		});
 		{
 			helix::library::ScopedBackendProfiling profiling;
 			timing.steadyPropagation = measureCudaPhase(memoryTracker, [&]() {
-				context->run_steps(kSteadySteps);
+				context->run_steps(steadySteps);
 			});
 			timing.resultExtraction = measureCudaPhase(memoryTracker, [&]() {
 				directDensity = context->reduced_density();
@@ -1034,7 +1197,7 @@ int main()
 		if(captureCalibration)
 		{
 			const helix::RunResult calibration = runSolverCalibration(options, totalSteps);
-			validateCalibration(directDensity, calibration);
+			validateCalibration(directDensity, calibration, totalSteps);
 		}
 
 		const auto legacyOutputs = helix::test::benchmark::findLegacyOutputs(workspace.path());
@@ -1053,6 +1216,8 @@ int main()
 			bath,
 			hierarchy,
 			mainMeasurement,
+			warmupSteps,
+			steadySteps,
 			captureCalibration,
 			timing,
 			memory,
@@ -1062,6 +1227,19 @@ int main()
 		require(measuredSteadySpmmCalls.has_value(), "benchmark must collect steady SpMM call count");
 		require(*measuredSteadySpmmCalls == static_cast<long long>(hDiagonalSpecializedSpmmCalls(record.problem)),
 			"benchmark steady SpMM call count must reflect H_DIAGONAL elementwise specialization");
+		const auto measuredTransposeCount = integerCounterValue(record.profiling.counters.transpose.callCount);
+		require(measuredTransposeCount.has_value(), "benchmark must collect physical transpose call count");
+		require(*measuredTransposeCount
+				== static_cast<long long>(hDiagonalSpecializedPhysicalTransposeCalls(record.problem)),
+			"benchmark transpose call count must reflect current physical transpose strategy");
+		const auto measuredTransposeBytes = integerCounterValue(record.profiling.counters.transpose.bytes);
+		require(measuredTransposeBytes.has_value(), "benchmark must collect physical transpose bytes");
+		require(*measuredTransposeBytes == static_cast<long long>(
+			hDiagonalSpecializedPhysicalTransposeCalls(record.problem)
+			* record.problem.hilbertSize
+			* record.problem.hilbertSize
+			* complexScalarBytes(record)),
+			"benchmark transpose bytes must reflect current physical transpose strategy");
 		const auto measuredD2DCopyCount = integerCounterValue(record.profiling.counters.d2dCopy.copyCount);
 		require(measuredD2DCopyCount.has_value(), "benchmark must collect integrator D2D copy count");
 		require(*measuredD2DCopyCount == static_cast<long long>(swapIntegratorD2DCopyCount(record.problem)),
@@ -1089,6 +1267,11 @@ int main()
 			"benchmark JSONL records SpMM call count");
 		requireFileContains(artifacts.jsonl, "\"d2d_copy\":{\"copy_count\":",
 			"benchmark JSONL records D2D copy count");
+		requireFileContains(artifacts.jsonl, "\"transpose\":{\"call_count\":",
+			"benchmark JSONL records transpose call count");
+		requireFileContains(artifacts.jsonl,
+			"\"structured_v_specialization_decision\"",
+			"benchmark JSONL records structured V specialization decision");
 		if(cusparseReusePlanEnabledFromEnv())
 		{
 			requireFileContains(artifacts.jsonl, "\"descriptor_create_count\":0",
@@ -1123,8 +1306,35 @@ int main()
 			"## H_DIAGONAL elementwise specialization comparison",
 			"benchmark summary records diagonal H specialization comparison");
 		requireFileContains(artifacts.summary,
+			"## Structured V specialization spike decision",
+			"benchmark summary records structured V specialization decision");
+		requireFileContains(artifacts.summary,
+			"remains validation-only and unaffected",
+			"benchmark summary records generic sparse contract boundary");
+		requireFileContains(artifacts.summary,
 			"## Integrator D2D recurrence comparison",
 			"benchmark summary records integrator D2D before-after comparison");
+		requireFileContains(artifacts.summary,
+			"## Layout / transpose option matrix",
+			"benchmark summary records layout transpose decision matrix");
+		requireFileContains(artifacts.summary,
+			"transpose_time_ms_policy",
+			"benchmark summary records transpose timing fallback policy");
+		requireFileContains(artifacts.summary,
+			"public result order remains row-major",
+			"benchmark summary records public result order compatibility statement");
+		requireFileContains(artifacts.summary,
+			"## Synchronization audit and replacement plan",
+			"benchmark summary records synchronization audit");
+		requireFileContains(artifacts.summary,
+			"measureCudaPhase",
+			"benchmark summary records runner synchronization site");
+		requireFileContains(artifacts.summary,
+			"## CUDA Graph feasibility decision",
+			"benchmark summary records CUDA Graph feasibility decision");
+		requireFileContains(artifacts.summary,
+			"defer_fixed_shape_capture",
+			"benchmark summary records fixed-shape graph decision");
 		requireFileContains(artifacts.summary,
 			"Final ownership is unchanged",
 			"benchmark summary records final dRho ownership statement");

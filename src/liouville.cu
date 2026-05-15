@@ -479,8 +479,6 @@ void develop()
 	F=dRho;
 	recordFullHierarchyD2DCopy(static_cast<std::size_t>(rhoSize));
 	static Complex one=make_Complex(1.0,0.0);
-	static Complex minusOne=make_Complex(-1.0,0.0);
-	static Complex zero=make_Complex(0.0,0.0);
 	device_vector<Complex>* current=&dRho;
 	device_vector<Complex>* next=&B;
 	for(int j=1;j<=m;j++)

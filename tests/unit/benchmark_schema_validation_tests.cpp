@@ -24,6 +24,29 @@ bool hasEvidenceId(const helix::test::benchmark::BenchmarkRecord& record, const 
 		});
 }
 
+const helix::test::benchmark::BenchmarkHypothesisEvidence* findEvidence(
+	const helix::test::benchmark::BenchmarkRecord& record,
+	const std::string& id)
+{
+	const auto it = std::find_if(record.profiling.hypotheses.begin(),
+		record.profiling.hypotheses.end(),
+		[&id](const auto& hypothesis) {
+			return hypothesis.id == id;
+		});
+	return it == record.profiling.hypotheses.end() ? nullptr : &*it;
+}
+
+bool evidenceFieldHasValue(const helix::test::benchmark::BenchmarkHypothesisEvidence& evidence,
+	const std::string& name,
+	const std::string& value)
+{
+	return std::any_of(evidence.fields.begin(),
+		evidence.fields.end(),
+		[&](const auto& field) {
+			return field.name == name && field.value == value;
+		});
+}
+
 void expectValid(helix::test::Reporter& reporter,
 	const helix::test::benchmark::BenchmarkRecord& record,
 	const char* message)
@@ -151,6 +174,125 @@ void test_sample_record_covers_contract(helix::test::Reporter& reporter)
 	expectValid(reporter, mainOnlyRecord, "main-only benchmark record validates with calibration not captured");
 }
 
+void test_transpose_counters_promote_layout_evidence(helix::test::Reporter& reporter)
+{
+	using namespace helix::test::benchmark;
+
+	BenchmarkRecord record = sampleLegacySpinGlassRecord();
+	record.profiling.counters.transpose.callCount = collectedCounter(12LL, "count");
+	record.profiling.counters.transpose.bytes = collectedCounter(1024LL, "bytes");
+	record.profiling.hypotheses =
+		defaultProfilingEvidenceSlots(record.timing, record.memory, record.profiling.counters);
+	expectValid(reporter, record, "benchmark record validates with collected transpose counters");
+
+	const BenchmarkHypothesisEvidence* h005 = findEvidence(record, "H-005");
+	reporter.expect(h005 != nullptr, "H-005 evidence exists with transpose counters");
+	if(h005 == nullptr)
+	{
+		return;
+	}
+	reporter.expect(h005->status == "collected", "H-005 is collected when transpose counters are present");
+	reporter.expect(evidenceFieldHasValue(*h005, "transpose_count", "12"),
+		"H-005 records collected transpose count");
+	reporter.expect(evidenceFieldHasValue(*h005, "transpose_bytes", "1024"),
+		"H-005 records collected transpose bytes");
+	reporter.expect(h005->method.find("transpose") != std::string::npos,
+		"H-005 method explains transpose counter source");
+}
+
+void test_sync_audit_evidence_records_graph_decision(helix::test::Reporter& reporter)
+{
+	using namespace helix::test::benchmark;
+
+	BenchmarkRecord record = sampleLegacySpinGlassRecord();
+	const BenchmarkHypothesisEvidence* h003 = findEvidence(record, "H-003");
+	reporter.expect(h003 != nullptr, "H-003 evidence exists for synchronization audit");
+	if(h003 == nullptr)
+	{
+		return;
+	}
+	reporter.expect(evidenceFieldHasValue(*h003, "sync_audit_sites", "measureCudaPhase,LegacyRuntimeSession::run_steps,develop,getdRhoSparse,clearLiouvilleStorage"),
+		"H-003 records audited synchronization sites");
+	reporter.expect(evidenceFieldHasValue(*h003, "event_replacement_plan", "required_before_removing_sync"),
+		"H-003 records event replacement requirement");
+	reporter.expect(evidenceFieldHasValue(*h003, "cuda_graph_decision", "defer_fixed_shape_capture"),
+		"H-003 records CUDA Graph feasibility decision");
+	reporter.expect(h003->downstreamAction.find("CUDA Graph") != std::string::npos,
+		"H-003 downstream action names CUDA Graph follow-up");
+}
+
+void test_structured_v_specialization_decision_is_recorded(helix::test::Reporter& reporter)
+{
+	using namespace helix::test::benchmark;
+
+	const BenchmarkRecord record = sampleLegacySpinGlassRecord();
+	const BenchmarkHypothesisEvidence* h001 = findEvidence(record, "H-001");
+	reporter.expect(h001 != nullptr, "H-001 evidence exists for sparse backend decisions");
+	if(h001 == nullptr)
+	{
+		return;
+	}
+	reporter.expect(evidenceFieldHasValue(*h001,
+			"structured_v_specialization_decision",
+			"defer_legacy_spin_glass_only"),
+		"H-001 records the structured V specialization decision");
+	reporter.expect(evidenceFieldHasValue(*h001,
+			"structured_v_generic_sparse_contract",
+			"unaffected:System::from_sparse_validation_only"),
+		"H-001 records the generic sparse contract boundary");
+
+	const std::string jsonl = toJsonLine(record);
+	reporter.expect(jsonl.find("\"structured_v_specialization_decision\"") != std::string::npos,
+		"JSONL includes structured V specialization decision evidence");
+	reporter.expect(jsonl.find("\"structured_v_generic_sparse_contract\"") != std::string::npos,
+		"JSONL includes generic sparse contract evidence");
+}
+
+void test_before_after_statistics_helpers(helix::test::Reporter& reporter)
+{
+	using namespace helix::test::benchmark;
+
+	const BenchmarkMetricStats stats = summarizeBenchmarkSamples({10.0, 14.0, 12.0});
+	reporter.expect(stats.count == 3, "sample statistics record sample count");
+	reporter.expectNear(stats.minimum, 10.0, 1.0e-12, "sample statistics record minimum");
+	reporter.expectNear(stats.maximum, 14.0, 1.0e-12, "sample statistics record maximum");
+	reporter.expectNear(stats.median, 12.0, 1.0e-12, "sample statistics record median");
+	reporter.expectNear(stats.sampleStddev, 2.0, 1.0e-12, "sample statistics record sample stdev");
+
+	BenchmarkRecord record = sampleLegacySpinGlassRecord();
+	record.problem.steadySteps = 5;
+	record.problem.warmupSteps = 2;
+	record.problem.steps = 7;
+	record.timing.init = 1.0;
+	record.timing.warmup = 2.0;
+	record.timing.steadyPropagation = 25.0;
+	record.timing.resultExtraction = 3.0;
+	record.timing.teardown = 4.0;
+	reporter.expectNear(steadyPropagationMsPerStep(record), 5.0, 1.0e-12,
+		"steady propagation per-step metric divides by steady steps");
+	reporter.expectNear(benchmarkMainTotalMs(record.timing), 35.0, 1.0e-12,
+		"benchmark main total sums measured phases");
+
+	reporter.expect(classifyBenchmarkPostPreRatio(0.90, 0.02, true)
+			== BenchmarkBeforeAfterConclusion::OverallImproved,
+		"ratio below one outside noise is an overall improvement");
+	reporter.expect(classifyBenchmarkPostPreRatio(1.10, 0.02, true)
+			== BenchmarkBeforeAfterConclusion::OverallRegressed,
+		"ratio above one outside noise is an overall regression");
+	reporter.expect(classifyBenchmarkPostPreRatio(1.01, 0.02, true)
+			== BenchmarkBeforeAfterConclusion::WithinNoise,
+		"ratio inside the noise band is within noise");
+	reporter.expect(classifyBenchmarkPostPreRatio(0.90, 0.12, true)
+			== BenchmarkBeforeAfterConclusion::InconclusiveDueToVarianceOrBuildMismatch,
+		"high relative noise makes the conclusion inconclusive");
+	reporter.expect(classifyBenchmarkPostPreRatio(0.90, 0.02, false)
+			== BenchmarkBeforeAfterConclusion::InconclusiveDueToVarianceOrBuildMismatch,
+		"build mismatch makes the conclusion inconclusive");
+	reporter.expect(std::string(toString(BenchmarkBeforeAfterConclusion::OverallImproved))
+			== "overall_improved",
+		"before/after conclusion string is release-snippet friendly");
+}
+
 void test_jsonl_emission_contains_required_blocks_and_escapes_strings(helix::test::Reporter& reporter)
 {
 	auto record = helix::test::benchmark::sampleLegacySpinGlassRecord();
@@ -215,6 +357,10 @@ void test_jsonl_emission_contains_required_blocks_and_escapes_strings(helix::tes
 	reporter.expect(jsonl.find("\"id\":\"H-001\"") != std::string::npos, "JSONL includes H-001 evidence");
 	reporter.expect(jsonl.find("\"id\":\"H-005\"") != std::string::npos, "JSONL includes H-005 evidence");
 	reporter.expect(jsonl.find("\"fields\":[{") != std::string::npos, "JSONL includes evidence fields");
+	reporter.expect(jsonl.find("\"sync_audit_sites\"") != std::string::npos,
+		"JSONL includes synchronization audit evidence");
+	reporter.expect(jsonl.find("\"cuda_graph_decision\"") != std::string::npos,
+		"JSONL includes CUDA Graph feasibility decision evidence");
 	reporter.expect(jsonl.find("\"method\":") != std::string::npos, "JSONL includes evidence method");
 	reporter.expect(jsonl.find("\"interpretation\":") != std::string::npos,
 		"JSONL includes evidence interpretation");
@@ -307,6 +453,10 @@ int main()
 
 	test_enum_strings_match_public_api(reporter);
 	test_sample_record_covers_contract(reporter);
+	test_transpose_counters_promote_layout_evidence(reporter);
+	test_sync_audit_evidence_records_graph_decision(reporter);
+	test_structured_v_specialization_decision_is_recorded(reporter);
+	test_before_after_statistics_helpers(reporter);
 	test_jsonl_emission_contains_required_blocks_and_escapes_strings(reporter);
 	test_negative_samples_report_field_paths(reporter);
 

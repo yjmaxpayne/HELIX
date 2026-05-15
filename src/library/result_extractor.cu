@@ -72,6 +72,7 @@ ReducedDensityExtraction ResultExtractor::final_reduced_density()
 	extraction.shape.count = 1;
 	extraction.shape.rows = static_cast<std::size_t>(Param::N);
 	extraction.shape.cols = static_cast<std::size_t>(Param::N);
+	// Public RunResult values stay row-major even if a future backend uses a private layout.
 	extraction.shape.storageOrder = MatrixStorageOrder::RowMajor;
 	extraction.values.reserve(hostDensity.size());
 	for(const auto& value : hostDensity)

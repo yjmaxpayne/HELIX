@@ -732,6 +732,7 @@ if(HELIX_BUILD_TESTS)
 
     add_executable(transpose_cuda_tests
         tests/cuda/transpose_tests.cu
+        src/library/backend_profiling.cpp
         src/matrix_util.cu
     )
 

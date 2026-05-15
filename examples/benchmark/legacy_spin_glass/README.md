@@ -83,8 +83,9 @@ running the benchmark locally. Raw Nsight reports are intentionally excluded
 because profiler captures can embed environment variables and local paths. The
 Markdown summary records the `H_DIAGONAL` elementwise specialization comparison
 and the default steady SpMM count after the diagonal Hamiltonian term leaves the
-cuSPARSE path.
-directory includes `test_results/` with the
+cuSPARSE path. It also records the structured `V` specialization decision as
+`defer_legacy_spin_glass_only`, with `System::from_sparse()` remaining
+validation-only and unaffected. The directory includes `test_results/` with the
 ordinary correctness, explicit benchmark, quick baseline, full baseline,
-Python-smoke status, and Nsight-capture evidence that justify the sample's gate
-status fields. Timing values are machine-dependent.
+Python-smoke status, and Nsight optional-capture status that justify the
+sample's gate status fields. Timing values are machine-dependent.

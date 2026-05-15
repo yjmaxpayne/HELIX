@@ -142,7 +142,10 @@ names instead of creating a parallel naming scheme:
    * - ``helix.transpose``
      - ``src/matrix_util.cu`` ``transpose()`` and sparse call sites in
        ``src/liouville.cu``
-     - H-005 transpose/layout hotspot evidence.
+     - Deferred H-005 transpose/layout hotspot evidence.
+   * - ``helix.integrator_d2d``
+     - ``src/liouville.cu`` ``develop()``
+     - H-005 integrator D2D copy count and byte evidence.
    * - ``helix.result_extraction``
      - ``src/library/result_extractor.cu`` ``ResultExtractor::final_reduced_density()``
      - H-002 host copy and result extraction cost.
@@ -217,7 +220,10 @@ Important fields:
        hypothesis evidence slots. The generated Markdown summary also records
        the ``H_DIAGONAL`` elementwise specialization comparison; the default
        steady benchmark expects V-path-only SpMM calls after the diagonal
-       Hamiltonian term leaves the cuSPARSE path.
+       Hamiltonian term leaves the cuSPARSE path. It also records the
+       structured ``V`` specialization decision, the generic sparse contract
+       boundary, the T8 synchronization audit, and the fixed-shape CUDA Graph
+       feasibility decision.
 
 Minimal sample:
 
@@ -254,6 +260,20 @@ Minimal sample:
            "workspace_alloc_count": 0,
            "workspace_bytes": 183,
            "buffer_size_query_count": 0
+         },
+         "transpose": {
+           "call_count": 320,
+           "time_ms": "not_collected",
+           "bytes": 2684354560
+         },
+         "d2d_copy": {
+           "copy_count": 2,
+           "time_ms": "not_collected",
+           "bytes": 167772160
+         },
+         "sync": {
+           "device_synchronize_count": 1,
+           "sync_wait_ms": 0.0
          },
          "result_extraction": {
            "sync_wait_ms": 0.0,
@@ -293,6 +313,11 @@ the JSONL file. It contains:
 * CUDA 13 cuSPARSE API adopt/defer/reject decision table;
 * structural legacy-wrapper versus reusable-plan SpMM setup comparison;
 * ``H_DIAGONAL`` elementwise specialization comparison;
+* structured ``V`` specialization decision for the legacy spin-glass path;
+* integrator D2D recurrence before/after comparison;
+* layout/transpose option matrix with the public row-major result-order statement;
+* synchronization audit with stream/event replacement plan;
+* fixed-shape CUDA Graph feasibility decision;
 * correctness and baseline gate status;
 * structured profiling evidence slots for H-001..H-005; and
 * a release/PR snippet template.
@@ -309,7 +334,7 @@ Release/report handoff
 Use the generated summary snippet in release notes or PR descriptions. The
 handoff should state the environment, case, phase timings, memory metrics,
 H-001..H-005 status, and gate status. For final sprint evidence, point to
-``.plan/v0.0.3-helix_backend_profiling_benchmark-plan/10-final-baseline-handoff.md``
+``.plan/v0.0.4-helix-gpu-heom-optimize-plan/10-final-benchmark-handoff.md``
 or to the uploaded benchmark artifact root.
 
 Baseline separation

@@ -21,7 +21,7 @@ The table below records what each named gate protects. New expected-fail gates m
 | `v01_public_header_compile_gate` | `unit` | no | A consumer can compile by including only `<helix/helix.h>`. |
 | `v01_external_consumer_cmake_gate` | `integration` | no | A downstream CMake project can `find_package(HELIX CONFIG REQUIRED)` and link `HELIX::helix`. |
 | `v01_api_schema_validation_gate` | `unit` | no | CSR schema validation and unsupported execution diagnostics are covered by unit tests. |
-| `benchmark_schema_validation_tests` | `unit` | no | Internal `helix.benchmark.v1` sample records, JSONL emission, and schema validation stay stable. |
+| `benchmark_schema_validation_tests` | `unit` | no | Internal `helix.benchmark.v1` sample records, JSONL emission, structured backend decisions, and schema validation stay stable. |
 | `benchmark_artifact_hygiene_tests` | `unit` | no | Benchmark artifact root resolution, legacy generated-output detection, and JSONL/summary containment are covered without a GPU. |
 | `v003_legacy_spin_glass_benchmark_gate` | `benchmark` | yes | Default legacy spin-glass benchmark writes `helix_benchmark.jsonl`, `helix_benchmark_summary.md`, and an `nsight/` artifact directory under the benchmark artifact root. |
 | `v003_legacy_spin_glass_benchmark_example_gate` | `benchmark` | yes | User-facing benchmark example script runs the same artifact path contract from `examples/benchmark/legacy_spin_glass/`. |
@@ -86,7 +86,11 @@ HELIX_BENCHMARK_WITH_NSIGHT=systems examples/benchmark/legacy_spin_glass/run.sh
 
 The checked-in sample output lives in `examples/benchmark/legacy_spin_glass/reference/` and includes
 the JSONL, Markdown summary, and `test_results/` evidence for the ordinary correctness, benchmark,
-quick/full baseline, Python-smoke status, and Nsight tool checks from the same validation session.
+quick/full baseline, Python-smoke status, and optional Nsight status from the same validation
+session.
+The JSONL/summary also record the structured `V` specialization decision as
+`defer_legacy_spin_glass_only`; this is a private legacy spin-glass-path decision and leaves
+`System::from_sparse()` validation-only semantics unchanged.
 Raw Nsight Systems / Nsight Compute reports are not checked in because they can embed environment
 variables, credentials, and local paths.
 
@@ -128,7 +132,8 @@ the benchmark scope names recorded in `measurement_scope.nvtx_naming_convention`
 `benchmark.main.result_extraction`, `benchmark.main.teardown`, and `benchmark.calibration`.
 Future internal markers should keep these evidence mappings: `helix.develop` for H-003,
 `helix.getdRhoSparse` for H-001/H-003, `helix.cuda_sparse_backend_plan` for H-001/H-004,
-`helix.transpose` for H-005, and `helix.result_extraction` for H-002.
+`helix.integrator_d2d` for H-005 D2D copy count/bytes, `helix.transpose` for the deferred H-005
+transpose/layout slice, and `helix.result_extraction` for H-002.
 
 When the example script runs with `HELIX_BENCHMARK_WITH_NSIGHT=systems`, it sets
 `HELIX_BENCHMARK_NSIGHT_ARTIFACT=nsight/<run_id>-systems.nsys-rep` so the JSONL and Markdown summary
@@ -183,6 +188,20 @@ with these top-level fields:
         "workspace_bytes": 183,
         "buffer_size_query_count": 0
       },
+      "transpose": {
+        "call_count": 320,
+        "time_ms": "not_collected",
+        "bytes": 2684354560
+      },
+      "d2d_copy": {
+        "copy_count": 2,
+        "time_ms": "not_collected",
+        "bytes": 167772160
+      },
+      "sync": {
+        "device_synchronize_count": 1,
+        "sync_wait_ms": 0.0
+      },
       "result_extraction": {
         "sync_wait_ms": 0.0,
         "host_allocation_ms": 0.0,
@@ -212,7 +231,10 @@ It includes the schema version, artifact paths, run environment, case metadata, 
 measurement scope table, memory table, correctness/baseline gate status, profiling counter table,
 CUDA 13 cuSPARSE API decision table, structural legacy-wrapper versus reusable-plan comparison,
 `H_DIAGONAL` elementwise specialization comparison,
-structured profiling evidence slots for H-001..H-005, and a short release-note snippet. Each
+integrator D2D recurrence before/after comparison, layout/transpose option matrix with the public
+row-major result-order statement, synchronization audit with stream/event replacement plan,
+fixed-shape CUDA Graph feasibility decision, structured profiling evidence slots for
+H-001..H-005, and a short release-note snippet. Each
 hypothesis records `id`,
 `name`, `status`, `fields`, `method`, `interpretation`, and `downstream_action`. Allowed evidence
 statuses are `not_collected`, `collected`, `inconclusive`, `supported`, and `not_supported`; missing

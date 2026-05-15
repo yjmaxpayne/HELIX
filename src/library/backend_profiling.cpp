@@ -92,6 +92,19 @@ void recordSpmmProfiling(const BackendSpmmProfilingCounters& counters) noexcept
 	addOptional(snapshot.bufferSizeQueryCount, counters.bufferSizeQueryCount);
 }
 
+void recordTransposeProfiling(const BackendTransposeProfilingCounters& counters) noexcept
+{
+	if(!backendProfilingEnabled())
+	{
+		return;
+	}
+
+	BackendTransposeProfilingCounters& snapshot = profilingState().counters.transpose;
+	addOptional(snapshot.callCount, counters.callCount);
+	addOptional(snapshot.timeMs, counters.timeMs);
+	addOptional(snapshot.bytes, counters.bytes);
+}
+
 void recordD2DCopyProfiling(const BackendD2DCopyProfilingCounters& counters) noexcept
 {
 	if(!backendProfilingEnabled())

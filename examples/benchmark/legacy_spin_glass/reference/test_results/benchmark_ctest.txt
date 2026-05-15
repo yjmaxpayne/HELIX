@@ -1,17 +1,14 @@
-[OUTPUT]
 Internal ctest changing into directory: /home/yjmaxpayne/Dev/HELIX/build/cmake
-
-[HANDLER_OUTPUT]
 Test project /home/yjmaxpayne/Dev/HELIX/build/cmake
 
     Start 6: v003_legacy_spin_glass_benchmark_gate
-1/2 Test #6: v003_legacy_spin_glass_benchmark_gate ...........   Passed    0.71 sec
+1/2 Test #6: v003_legacy_spin_glass_benchmark_gate ...........   Passed    0.77 sec
     Start 7: v003_legacy_spin_glass_benchmark_example_gate
-2/2 Test #7: v003_legacy_spin_glass_benchmark_example_gate ...   Passed    0.69 sec
+2/2 Test #7: v003_legacy_spin_glass_benchmark_example_gate ...   Passed    0.76 sec
 
 100% tests passed, 0 tests failed out of 2
 
 Label Time Summary:
-benchmark    =   1.40 sec*proc (2 tests)
+benchmark    =   1.53 sec*proc (2 tests)
 
-Total Test time (real) =   1.40 sec
+Total Test time (real) =   1.53 sec
