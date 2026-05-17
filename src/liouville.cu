@@ -156,18 +156,17 @@ bool sparseBackendPlanEnabled()
 		const char* value = std::getenv("HELIX_CUSPARSE_REUSE_PLAN");
 		if(value == nullptr || value[0] == '\0')
 		{
-			return true;
+			return false; // R1 rollback: reusable plan opt-in only (see .plan/research/regression-recovery-and-opt/00-DESIGN.md §2)
 		}
 		const std::string setting(value);
-		return !(setting == "0"
-			|| setting == "false"
-			|| setting == "False"
-			|| setting == "FALSE"
-			|| setting == "off"
-			|| setting == "OFF"
-			|| setting == "no"
-			|| setting == "NO"
-			|| setting == "legacy");
+		return (setting == "1"
+			|| setting == "true"
+			|| setting == "True"
+			|| setting == "TRUE"
+			|| setting == "on"
+			|| setting == "ON"
+			|| setting == "yes"
+			|| setting == "YES");
 	}();
 	return enabled;
 }
