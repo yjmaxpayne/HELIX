@@ -136,6 +136,8 @@ void test_sample_record_covers_contract(helix::test::Reporter& reporter)
 	reporter.expect(record.diagnostics->status == "Success", "diagnostics status is Success");
 	reporter.expect(!record.profiling.nsightArtifact.has_value(),
 		"sample leaves Nsight artifact unset until manual capture");
+	reporter.expect(record.profiling.timingMode == "attribution",
+		"sample defaults to attribution timing mode");
 	reporter.expect(nsightArtifactSummaryValue(record.profiling.nsightArtifact) == "not_collected",
 		"summary value reports not_collected when Nsight capture is absent");
 	reporter.expect(record.profiling.hypotheses.size() == 5, "sample contains five profiling hypotheses");
@@ -172,6 +174,10 @@ void test_sample_record_covers_contract(helix::test::Reporter& reporter)
 	mainOnlyRecord.measurementScopes.calibrationCaptured = false;
 	mainOnlyRecord.measurementScopes.calibrationStatus = "not_captured";
 	expectValid(reporter, mainOnlyRecord, "main-only benchmark record validates with calibration not captured");
+
+	auto pureTimingRecord = record;
+	pureTimingRecord.profiling.timingMode = "pure_timing";
+	expectValid(reporter, pureTimingRecord, "pure timing benchmark record validates");
 }
 
 void test_transpose_counters_promote_layout_evidence(helix::test::Reporter& reporter)
@@ -326,6 +332,8 @@ void test_jsonl_emission_contains_required_blocks_and_escapes_strings(helix::tes
 	reporter.expect(jsonl.find("\"diagnostics\":{") != std::string::npos, "JSONL includes diagnostics block");
 	reporter.expect(jsonl.find("\"gates\":{") != std::string::npos, "JSONL includes gates block");
 	reporter.expect(jsonl.find("\"profiling\":{") != std::string::npos, "JSONL includes profiling block");
+	reporter.expect(jsonl.find("\"timing_mode\":\"attribution\"") != std::string::npos,
+		"JSONL records the benchmark timing mode");
 	reporter.expect(jsonl.find("\"counters\":{") != std::string::npos, "JSONL includes profiling counters");
 	reporter.expect(jsonl.find("\"spmm\":{\"call_count\":\"not_collected\"") != std::string::npos,
 		"JSONL emits not_collected SpMM counters");
@@ -423,6 +431,10 @@ void test_negative_samples_report_field_paths(helix::test::Reporter& reporter)
 	record = helix::test::benchmark::sampleLegacySpinGlassRecord();
 	record.gates.baselineGateStatus = "unknown";
 	expectInvalidPath(reporter, record, "gates.baseline_gate_status", "invalid baseline gate status is rejected");
+
+	record = helix::test::benchmark::sampleLegacySpinGlassRecord();
+	record.profiling.timingMode = "wall_clockish";
+	expectInvalidPath(reporter, record, "profiling.timing_mode", "invalid timing mode is rejected");
 
 	record = helix::test::benchmark::sampleLegacySpinGlassRecord();
 	record.profiling.hypotheses.front().status = "pending";

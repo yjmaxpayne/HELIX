@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+exec bash "${SCRIPT_DIR}/run_legacy_spin_glass_t11_ablation_benchmark.sh" "$@"
+
 usage() {
     cat <<'USAGE'
 Usage:
@@ -9,7 +12,7 @@ Usage:
     --post-ref <ref> \
     [--runs 10] \
     [--warmup-steps 10] \
-    [--steady-steps 100] \
+    [--steady-steps 200] \
     [--artifact-root /tmp/helix-e2e-before-after-YYYYMMDD] \
     [--build-type Release] \
     [--cuda-architectures native] \

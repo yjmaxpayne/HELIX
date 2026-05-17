@@ -206,6 +206,7 @@ struct BenchmarkHypothesisEvidence {
 };
 
 struct BenchmarkProfiling {
+	std::string timingMode = "attribution";
 	std::vector<std::string> instrumentation = {"runner_wall_clock"};
 	bool nvtxEnabled = false;
 	std::optional<std::string> nsightArtifact;
@@ -467,6 +468,20 @@ inline std::vector<BenchmarkHypothesisEvidence> defaultProfilingEvidenceSlots(co
 	const BenchmarkProfilingCounters& counters)
 {
 	std::vector<BenchmarkHypothesisEvidence> slots;
+	const bool spmmCollected =
+		counters.spmm.callCount.collected()
+		|| counters.spmm.timeMs.collected()
+		|| counters.spmm.descriptorCreateCount.collected()
+		|| counters.spmm.workspaceAllocCount.collected()
+		|| counters.spmm.workspaceBytes.collected()
+		|| counters.spmm.bufferSizeQueryCount.collected();
+	const bool resultExtractionCollected =
+		counters.resultExtraction.syncWaitMs.collected()
+		|| counters.resultExtraction.hostAllocationMs.collected()
+		|| counters.resultExtraction.d2hCopyMs.collected()
+		|| counters.resultExtraction.conversionMs.collected()
+		|| counters.resultExtraction.d2hBytes.collected()
+		|| counters.resultExtraction.elementCount.collected();
 	const bool transposeCollected =
 		counters.transpose.callCount.collected()
 		|| counters.transpose.timeMs.collected()
@@ -509,7 +524,7 @@ inline std::vector<BenchmarkHypothesisEvidence> defaultProfilingEvidenceSlots(co
 	slots.push_back({
 		"H-001",
 		"descriptor/workspace rebuild cost",
-		"collected",
+		spmmCollected ? "collected" : "not_collected",
 		{
 			evidenceField("context_init_ms", fixedMilliseconds(timing.init), "ms"),
 			evidenceField("spmm_call_count", counterSummary(counters.spmm.callCount), "count"),
@@ -522,14 +537,20 @@ inline std::vector<BenchmarkHypothesisEvidence> defaultProfilingEvidenceSlots(co
 			evidenceField("structured_v_generic_sparse_contract",
 				"unaffected:System::from_sparse_validation_only")
 		},
-		"private CudaSparseBackendPlan SpMM counters captured in the steady propagation scope after warmup",
-		"Descriptor creation, workspace allocation, buffer-size query, and SpMM call counters are separated from aggregate timing; warmed compatible calls should report zero setup counters. Structured V replacement remains deferred as a legacy spin-glass-only kernel decision, not a generic sparse contract.",
-		"Keep System::from_sparse() validation-only unchanged; revisit structured V only behind a private legacy adapter with reference-kernel, benchmark, and baseline gates."
+		spmmCollected
+			? "private CudaSparseBackendPlan SpMM counters captured in the steady propagation scope after warmup"
+			: "backend SpMM counters were disabled for pure timing; rerun attribution mode to collect this evidence",
+		spmmCollected
+			? "Descriptor creation, workspace allocation, buffer-size query, and SpMM call counters are separated from aggregate timing; warmed compatible calls should report zero setup counters. Structured V replacement remains deferred as a legacy spin-glass-only kernel decision, not a generic sparse contract."
+			: "Pure timing records wall-clock phases only, so descriptor/workspace attribution is intentionally unavailable in this record.",
+		spmmCollected
+			? "Keep System::from_sparse() validation-only unchanged; revisit structured V only behind a private legacy adapter with reference-kernel, benchmark, and baseline gates."
+			: "Use pure timing for release comparisons and attribution mode for backend counter diagnosis."
 	});
 	slots.push_back({
 		"H-002",
 		"host copy / result extraction cost",
-		"collected",
+		resultExtractionCollected ? "collected" : "not_collected",
 		{
 			evidenceField("result_extraction_ms", fixedMilliseconds(timing.resultExtraction), "ms"),
 			evidenceField("sync_wait_ms", counterSummary(counters.resultExtraction.syncWaitMs), "ms"),
@@ -540,9 +561,15 @@ inline std::vector<BenchmarkHypothesisEvidence> defaultProfilingEvidenceSlots(co
 			evidenceField("element_count", counterSummary(counters.resultExtraction.elementCount), "count"),
 			evidenceField("result_extraction_entrypoint", "helix::Context::reduced_density")
 		},
-		"internal ResultExtractor substage counters captured by the private backend profiling sink",
-		"Result extraction is split into sync wait, host allocation, D2H copy, conversion, bytes, and element count.",
-		"Use the substage distribution to decide whether final-state extraction needs buffer/layout changes."
+		resultExtractionCollected
+			? "internal ResultExtractor substage counters captured by the private backend profiling sink"
+			: "result extraction substage counters were disabled for pure timing; aggregate result extraction wall-clock remains available",
+		resultExtractionCollected
+			? "Result extraction is split into sync wait, host allocation, D2H copy, conversion, bytes, and element count."
+			: "Pure timing keeps result extraction in the phase timing total but does not collect substage attribution.",
+		resultExtractionCollected
+			? "Use the substage distribution to decide whether final-state extraction needs buffer/layout changes."
+			: "Use attribution mode only when substage diagnosis is needed."
 	});
 	slots.push_back({
 		"H-003",
@@ -760,6 +787,7 @@ inline bool validate(const BenchmarkRecord& record, std::vector<ValidationError>
 	const std::vector<std::string> scopeStatusValues = {"captured", "not_captured"};
 	const std::vector<std::string> evidenceStatusValues = {
 		"not_collected", "collected", "inconclusive", "supported", "not_supported"};
+	const std::vector<std::string> timingModeValues = {"pure_timing", "attribution"};
 	const std::vector<std::string> requiredEvidenceIds = {"H-001", "H-002", "H-003", "H-004", "H-005"};
 	const std::vector<std::string> memoryMethods = {"cudaMemGetInfo_delta"};
 
@@ -914,6 +942,10 @@ inline bool validate(const BenchmarkRecord& record, std::vector<ValidationError>
 	if(record.profiling.instrumentation.empty())
 	{
 		addError(errors, "profiling.instrumentation", "at least one instrumentation method is required");
+	}
+	if(!contains(timingModeValues, record.profiling.timingMode))
+	{
+		addError(errors, "profiling.timing_mode", "timing mode must be pure_timing or attribution");
 	}
 	if(record.profiling.hypotheses.empty())
 	{
@@ -1259,6 +1291,7 @@ inline std::string toJsonLine(const BenchmarkRecord& record)
 		   << "\"correctness_gate_status\":" << jsonString(record.gates.correctnessGateStatus) << ','
 		   << "\"baseline_gate_status\":" << jsonString(record.gates.baselineGateStatus) << "},"
 		   << "\"profiling\":{"
+		   << "\"timing_mode\":" << jsonString(record.profiling.timingMode) << ','
 		   << "\"instrumentation\":";
 	writeStringArray(output, record.profiling.instrumentation);
 	output << ','

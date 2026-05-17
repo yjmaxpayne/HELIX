@@ -265,6 +265,11 @@ bool cusparseReusePlanEnabledFromEnv()
 		|| *value == "legacy");
 }
 
+const char* timingModeName(bool collectBackendProfiling) noexcept
+{
+	return collectBackendProfiling ? "attribution" : "pure_timing";
+}
+
 void require(bool condition, const std::string& message)
 {
 	if(!condition)
@@ -413,6 +418,7 @@ helix::test::benchmark::BenchmarkRecord makeRecord(const UtcTimestamp& timestamp
 	const helix::test::benchmark::BenchmarkTiming& timing,
 	const helix::test::benchmark::BenchmarkMemory& memory,
 	const helix::test::benchmark::BenchmarkProfilingCounters& profilingCounters,
+	bool collectBackendProfiling,
 	const std::optional<std::string>& nsightArtifact)
 {
 	using namespace helix::test::benchmark;
@@ -457,7 +463,12 @@ helix::test::benchmark::BenchmarkRecord makeRecord(const UtcTimestamp& timestamp
 	record.diagnostics = mirrorDiagnostics(mainMeasurement.diagnostics);
 	record.gates.correctnessGateStatus = envOrDefault("HELIX_BENCHMARK_CORRECTNESS_GATE_STATUS", "not_run");
 	record.gates.baselineGateStatus = envOrDefault("HELIX_BENCHMARK_BASELINE_GATE_STATUS", "not_run");
+	record.profiling.timingMode = timingModeName(collectBackendProfiling);
 	record.profiling.instrumentation = {"runner_wall_clock", "cudaDeviceSynchronize_phase_boundaries"};
+	if(collectBackendProfiling)
+	{
+		record.profiling.instrumentation.push_back("backend_profiling_counters");
+	}
 	if(nsightArtifact.has_value())
 	{
 		record.profiling.instrumentation.push_back("nsight_systems");
@@ -468,8 +479,12 @@ helix::test::benchmark::BenchmarkRecord makeRecord(const UtcTimestamp& timestamp
 		defaultProfilingEvidenceSlots(record.timing, record.memory, record.profiling.counters);
 	record.notes =
 		calibrationCaptured
-		? "Context phase timing with HEOMSolver smoke calibration; calibration excluded from main aggregation; no legacy CLI output files expected"
-		: "Context phase timing without HEOMSolver smoke calibration; main-only artifact; no legacy CLI output files expected";
+		? std::string("Context phase timing with HEOMSolver smoke calibration; timing_mode=")
+			+ record.profiling.timingMode
+			+ "; calibration excluded from main aggregation; no legacy CLI output files expected"
+		: std::string("Context phase timing without HEOMSolver smoke calibration; timing_mode=")
+			+ record.profiling.timingMode
+			+ "; main-only artifact; no legacy CLI output files expected";
 	return record;
 }
 
@@ -490,6 +505,7 @@ void printSummary(const helix::test::benchmark::BenchmarkRecord& record, const M
 			  << " calibration_captured=" << (record.measurementScopes.calibrationCaptured ? "true" : "false")
 			  << " calibration_excluded_from_main="
 			  << (record.measurementScopes.calibrationExcludedFromMain ? "true" : "false")
+			  << " timing_mode=" << record.profiling.timingMode
 			  << " timing_ms.init=" << record.timing.init
 			  << " timing_ms.warmup=" << record.timing.warmup
 			  << " timing_ms.steady_propagation=" << record.timing.steadyPropagation
@@ -731,14 +747,21 @@ std::string markdownSummary(const helix::test::benchmark::BenchmarkRecord& recor
 	const std::size_t expectedSwapD2DBytes = expectedSwapD2DCopies * fullD2DBytes;
 	const std::size_t previousCopyBasedD2DBytes = previousCopyBasedD2DCopies * fullD2DBytes;
 	const std::size_t avoidedD2DBytes = avoidedD2DCopies * fullD2DBytes;
-	const bool reusePath = measuredSpmmCountersAreReusePath(record.profiling.counters.spmm);
-	const char* measuredPathName = reusePath ? "Reusable backend plan" : "Legacy wrapper fallback";
-	const char* measuredPathEvidence = reusePath
-		? "Measured `CudaSparseBackendPlan` counters in the profiled steady scope"
-		: "Measured fallback wrapper counters in the profiled steady scope";
-	const char* measuredPathBehavior = reusePath
-		? "Dense pointers are updated with `cusparseDnMatSetValues`; descriptor/workspace setup is zero after warmup for compatible calls."
-		: "Fallback path routes through `cuda_types.h` wrappers and reintroduces descriptor and buffer-size setup per SpMM call.";
+	const bool attributionMode = record.profiling.timingMode == "attribution";
+	const bool reusePath = attributionMode && measuredSpmmCountersAreReusePath(record.profiling.counters.spmm);
+	const char* measuredPathName = attributionMode
+		? (reusePath ? "Reusable backend plan" : "Legacy wrapper fallback")
+		: "Backend attribution disabled";
+	const char* measuredPathEvidence = attributionMode
+		? (reusePath
+			? "Measured `CudaSparseBackendPlan` counters in the profiled steady scope"
+			: "Measured fallback wrapper counters in the profiled steady scope")
+		: "Pure timing mode disables backend profiling counters for fair wall-clock comparison.";
+	const char* measuredPathBehavior = attributionMode
+		? (reusePath
+			? "Dense pointers are updated with `cusparseDnMatSetValues`; descriptor/workspace setup is zero after warmup for compatible calls."
+			: "Fallback path routes through `cuda_types.h` wrappers and reintroduces descriptor and buffer-size setup per SpMM call.")
+		: "Counters are reported as `not_collected`; use attribution mode for path-specific evidence.";
 	std::ostringstream output;
 	output << std::fixed << std::setprecision(3)
 		   << "# HELIX benchmark summary\n\n"
@@ -768,6 +791,7 @@ std::string markdownSummary(const helix::test::benchmark::BenchmarkRecord& recor
 		   << "| Compiler | `" << record.build.compiler << "` |\n"
 		   << "| Host OS | `" << record.host.os << "` |\n"
 		   << "| Host runner | `" << record.host.runner << "` |\n"
+		   << "| Timing mode | `" << record.profiling.timingMode << "` |\n"
 		   << "| GPU | `" << record.gpu.name << "` |\n"
 		   << "| GPU device | `" << record.gpu.device << "` |\n"
 		   << "| GPU driver | `" << record.gpu.driver << "` |\n"
@@ -830,6 +854,7 @@ std::string markdownSummary(const helix::test::benchmark::BenchmarkRecord& recor
 		   << "| Baseline | `" << record.gates.baselineGateStatus
 		   << "` | One of `not_run`, `passed`, or `failed`; benchmark runs default to `not_run`. |\n\n"
 		   << "## Profiling counters\n\n"
+		   << "Timing mode: `" << record.profiling.timingMode << "`. "
 		   << "`profiling.counters` uses numeric values when collected and `not_collected` for "
 			  "reserved fields that were not observed in this run.\n\n"
 		   << "| Group | Counter | Value |\n"
@@ -1074,6 +1099,7 @@ std::string markdownSummary(const helix::test::benchmark::BenchmarkRecord& recor
 		   << "- Memory: peak_device_bytes=" << record.memory.peakDeviceBytes
 		   << ", device_delta_bytes=" << record.memory.deviceDeltaBytes
 		   << ", method=`" << record.memory.measurementMethod << "`.\n"
+		   << "- Timing mode: `" << record.profiling.timingMode << "`.\n"
 		   << "- Gates: correctness=`" << record.gates.correctnessGateStatus << "`, baseline=`"
 		   << record.gates.baselineGateStatus << "`; speed threshold=`none`.\n"
 		   << "- Profiling evidence: H-001..H-005 slots are populated in `profiling.hypotheses`; "
@@ -1155,6 +1181,8 @@ int main()
 		const std::size_t steadySteps =
 			positiveSizeEnvOrDefault("HELIX_BENCHMARK_STEADY_STEPS", kDefaultSteadySteps);
 		const std::size_t totalSteps = warmupSteps + steadySteps;
+		const bool collectBackendProfiling =
+			envBoolOrDefault("HELIX_BENCHMARK_COLLECT_BACKEND_PROFILING", true);
 		const std::string runId = timestamp.compact + "-legacy-spin-glass-sm"
 			+ std::to_string(deviceProperties.major) + std::to_string(deviceProperties.minor);
 		const auto artifacts = helix::test::benchmark::artifactPathsForRoot(
@@ -1178,6 +1206,7 @@ int main()
 		timing.warmup = measureCudaPhase(memoryTracker, [&]() {
 			context->run_steps(warmupSteps);
 		});
+		if(collectBackendProfiling)
 		{
 			helix::library::ScopedBackendProfiling profiling;
 			timing.steadyPropagation = measureCudaPhase(memoryTracker, [&]() {
@@ -1187,6 +1216,15 @@ int main()
 				directDensity = context->reduced_density();
 			});
 			backendProfilingCounters = profiling.snapshot();
+		}
+		else
+		{
+			timing.steadyPropagation = measureCudaPhase(memoryTracker, [&]() {
+				context->run_steps(steadySteps);
+			});
+			timing.resultExtraction = measureCudaPhase(memoryTracker, [&]() {
+				directDensity = context->reduced_density();
+			});
 		}
 		const MeasurementResult mainMeasurement = makeMainMeasurementResult(options, hierarchy, directDensity, totalSteps);
 		timing.teardown = measureCudaPhase(memoryTracker, [&]() {
@@ -1222,33 +1260,37 @@ int main()
 			timing,
 			memory,
 			profilingCounters,
+			collectBackendProfiling,
 			optionalEnv("HELIX_BENCHMARK_NSIGHT_ARTIFACT"));
-		const auto measuredSteadySpmmCalls = integerCounterValue(record.profiling.counters.spmm.callCount);
-		require(measuredSteadySpmmCalls.has_value(), "benchmark must collect steady SpMM call count");
-		require(*measuredSteadySpmmCalls == static_cast<long long>(hDiagonalSpecializedSpmmCalls(record.problem)),
-			"benchmark steady SpMM call count must reflect H_DIAGONAL elementwise specialization");
-		const auto measuredTransposeCount = integerCounterValue(record.profiling.counters.transpose.callCount);
-		require(measuredTransposeCount.has_value(), "benchmark must collect physical transpose call count");
-		require(*measuredTransposeCount
-				== static_cast<long long>(hDiagonalSpecializedPhysicalTransposeCalls(record.problem)),
-			"benchmark transpose call count must reflect current physical transpose strategy");
-		const auto measuredTransposeBytes = integerCounterValue(record.profiling.counters.transpose.bytes);
-		require(measuredTransposeBytes.has_value(), "benchmark must collect physical transpose bytes");
-		require(*measuredTransposeBytes == static_cast<long long>(
-			hDiagonalSpecializedPhysicalTransposeCalls(record.problem)
-			* record.problem.hilbertSize
-			* record.problem.hilbertSize
-			* complexScalarBytes(record)),
-			"benchmark transpose bytes must reflect current physical transpose strategy");
-		const auto measuredD2DCopyCount = integerCounterValue(record.profiling.counters.d2dCopy.copyCount);
-		require(measuredD2DCopyCount.has_value(), "benchmark must collect integrator D2D copy count");
-		require(*measuredD2DCopyCount == static_cast<long long>(swapIntegratorD2DCopyCount(record.problem)),
-			"benchmark D2D copy count must reflect swap recurrence initial/final copies only");
-		const auto measuredD2DBytes = integerCounterValue(record.profiling.counters.d2dCopy.bytes);
-		require(measuredD2DBytes.has_value(), "benchmark must collect integrator D2D copy bytes");
-		require(*measuredD2DBytes == static_cast<long long>(
-			swapIntegratorD2DCopyCount(record.problem) * fullHierarchyD2DCopyBytes(record)),
-			"benchmark D2D bytes must reflect two full hierarchy copies per steady develop");
+		if(collectBackendProfiling)
+		{
+			const auto measuredSteadySpmmCalls = integerCounterValue(record.profiling.counters.spmm.callCount);
+			require(measuredSteadySpmmCalls.has_value(), "benchmark must collect steady SpMM call count");
+			require(*measuredSteadySpmmCalls == static_cast<long long>(hDiagonalSpecializedSpmmCalls(record.problem)),
+				"benchmark steady SpMM call count must reflect H_DIAGONAL elementwise specialization");
+			const auto measuredTransposeCount = integerCounterValue(record.profiling.counters.transpose.callCount);
+			require(measuredTransposeCount.has_value(), "benchmark must collect physical transpose call count");
+			require(*measuredTransposeCount
+					== static_cast<long long>(hDiagonalSpecializedPhysicalTransposeCalls(record.problem)),
+				"benchmark transpose call count must reflect current physical transpose strategy");
+			const auto measuredTransposeBytes = integerCounterValue(record.profiling.counters.transpose.bytes);
+			require(measuredTransposeBytes.has_value(), "benchmark must collect physical transpose bytes");
+			require(*measuredTransposeBytes == static_cast<long long>(
+				hDiagonalSpecializedPhysicalTransposeCalls(record.problem)
+				* record.problem.hilbertSize
+				* record.problem.hilbertSize
+				* complexScalarBytes(record)),
+				"benchmark transpose bytes must reflect current physical transpose strategy");
+			const auto measuredD2DCopyCount = integerCounterValue(record.profiling.counters.d2dCopy.copyCount);
+			require(measuredD2DCopyCount.has_value(), "benchmark must collect integrator D2D copy count");
+			require(*measuredD2DCopyCount == static_cast<long long>(swapIntegratorD2DCopyCount(record.problem)),
+				"benchmark D2D copy count must reflect swap recurrence initial/final copies only");
+			const auto measuredD2DBytes = integerCounterValue(record.profiling.counters.d2dCopy.bytes);
+			require(measuredD2DBytes.has_value(), "benchmark must collect integrator D2D copy bytes");
+			require(*measuredD2DBytes == static_cast<long long>(
+				swapIntegratorD2DCopyCount(record.problem) * fullHierarchyD2DCopyBytes(record)),
+				"benchmark D2D bytes must reflect two full hierarchy copies per steady develop");
+		}
 		validateRecord(record);
 		writeArtifacts(artifacts, record, mainMeasurement);
 
@@ -1262,24 +1304,35 @@ int main()
 		requireFileContains(artifacts.jsonl,
 			"\"calibration_excluded_from_main\":true",
 			"benchmark JSONL records calibration exclusion");
-		requireFileContains(artifacts.jsonl, "\"counters\":{", "benchmark JSONL records profiling counters");
-		requireFileContains(artifacts.jsonl, "\"spmm\":{\"call_count\":",
-			"benchmark JSONL records SpMM call count");
-		requireFileContains(artifacts.jsonl, "\"d2d_copy\":{\"copy_count\":",
-			"benchmark JSONL records D2D copy count");
-		requireFileContains(artifacts.jsonl, "\"transpose\":{\"call_count\":",
-			"benchmark JSONL records transpose call count");
 		requireFileContains(artifacts.jsonl,
-			"\"structured_v_specialization_decision\"",
-			"benchmark JSONL records structured V specialization decision");
-		if(cusparseReusePlanEnabledFromEnv())
+			std::string("\"timing_mode\":\"") + timingModeName(collectBackendProfiling) + "\"",
+			"benchmark JSONL records timing mode");
+		requireFileContains(artifacts.jsonl, "\"counters\":{", "benchmark JSONL records profiling counters");
+		if(collectBackendProfiling)
 		{
-			requireFileContains(artifacts.jsonl, "\"descriptor_create_count\":0",
-				"benchmark JSONL records zero steady descriptor creates after warmup");
-			requireFileContains(artifacts.jsonl, "\"workspace_alloc_count\":0",
-				"benchmark JSONL records zero steady workspace allocations after warmup");
-			requireFileContains(artifacts.jsonl, "\"buffer_size_query_count\":0",
-				"benchmark JSONL records zero steady buffer-size queries after warmup");
+			requireFileContains(artifacts.jsonl, "\"spmm\":{\"call_count\":",
+				"benchmark JSONL records SpMM call count");
+			requireFileContains(artifacts.jsonl, "\"d2d_copy\":{\"copy_count\":",
+				"benchmark JSONL records D2D copy count");
+			requireFileContains(artifacts.jsonl, "\"transpose\":{\"call_count\":",
+				"benchmark JSONL records transpose call count");
+			requireFileContains(artifacts.jsonl,
+				"\"structured_v_specialization_decision\"",
+				"benchmark JSONL records structured V specialization decision");
+			if(cusparseReusePlanEnabledFromEnv())
+			{
+				requireFileContains(artifacts.jsonl, "\"descriptor_create_count\":0",
+					"benchmark JSONL records zero steady descriptor creates after warmup");
+				requireFileContains(artifacts.jsonl, "\"workspace_alloc_count\":0",
+					"benchmark JSONL records zero steady workspace allocations after warmup");
+				requireFileContains(artifacts.jsonl, "\"buffer_size_query_count\":0",
+					"benchmark JSONL records zero steady buffer-size queries after warmup");
+			}
+		}
+		else
+		{
+			requireFileContains(artifacts.jsonl, "\"spmm\":{\"call_count\":\"not_collected\"",
+				"pure timing JSONL records SpMM counters as not_collected");
 		}
 		requireFileContains(artifacts.jsonl,
 			"\"result_extraction\":{",
