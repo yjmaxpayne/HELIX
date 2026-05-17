@@ -475,7 +475,24 @@ void develop()
 	device_vector<Complex>& B=developBStorage();
 	if(F.size()!=rhoSize){ F.resize(rhoSize); }
 	if(B.size()!=rhoSize){ B.resize(rhoSize); }
-	F=dRho;
+
+	// M3.1 H-3.1.1: migrate develop()'s D2D copies off the CUDA legacy default
+	// stream onto an owned non-zero stream, and bind cublasHandle to the same
+	// stream so the whole loop dispatches on a capture-friendly stream. This
+	// function-scope static is absorbed into Context::Impl by segment 3.
+	static cudaStream_t developCopyStream = nullptr;
+	if(developCopyStream == nullptr)
+	{
+		cudaStreamCreate(&developCopyStream);
+		cublasSetStream(cublasHandle, developCopyStream);
+	}
+
+	cudaMemcpyAsync(
+		raw_pointer_cast(F.data()),
+		raw_pointer_cast(dRho.data()),
+		sizeof(Complex) * static_cast<std::size_t>(rhoSize),
+		cudaMemcpyDeviceToDevice,
+		developCopyStream);
 	recordFullHierarchyD2DCopy(static_cast<std::size_t>(rhoSize));
 	static Complex one=make_Complex(1.0,0.0);
 	device_vector<Complex>* current=&dRho;
@@ -495,7 +512,12 @@ void develop()
 		cudaDeviceSynchronize();
 		std::swap(current,next);
 	}
-	copy(F.begin(),F.end(),dRho.begin());
+	cudaMemcpyAsync(
+		raw_pointer_cast(dRho.data()),
+		raw_pointer_cast(F.data()),
+		sizeof(Complex) * static_cast<std::size_t>(rhoSize),
+		cudaMemcpyDeviceToDevice,
+		developCopyStream);
 	recordFullHierarchyD2DCopy(static_cast<std::size_t>(rhoSize));
 
 	//RK4
@@ -675,7 +697,12 @@ void getdRhoSparse(const device_vector<Complex>& rhoVec,device_vector<Complex>& 
 	Complex* pdRho=raw_pointer_cast(drhoVec.data());
 	int n =Param::N;
 	Complex* buffer=raw_pointer_cast(dBuffer.data());
-	host_vector<int> edges=dHierarchyEdge;
+	// M3.1 H-3.1.1 (extended scope): hierarchy edges are static after
+	// initializeHierarchyStorage(); cache them once to eliminate the per-step
+	// thrust D->H copy on the legacy default stream that the M2 spike newly
+	// surfaced after develop()'s D2D copies were migrated. Function-scope
+	// static; absorbed into Context::Impl by segment 3.
+	static host_vector<int> edges=dHierarchyEdge;
 	int kMax=Param::KMax;
 	int vSize=dVElements.size();
 	std::vector<SparseBackendPlanSet>& backendPlans=sparseBackendPlans();

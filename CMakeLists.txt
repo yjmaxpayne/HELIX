@@ -792,6 +792,33 @@ if(HELIX_BUILD_TESTS)
         TIMEOUT 60
     )
 
+    # M3.1 H-3.1.1 mechanism microtest: cudaMemcpyAsync D2D on an owned non-zero
+    # stream. Mirrors the develop() patch at src/liouville.cu:478,498 region.
+    add_executable(develop_stream_ownership_microtests
+        tests/cuda/develop_stream_ownership_microtests.cu
+    )
+
+    target_link_libraries(develop_stream_ownership_microtests PRIVATE
+        helix_test_support
+        CUDA::cudart
+    )
+
+    target_include_directories(develop_stream_ownership_microtests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+
+    set_target_properties(develop_stream_ownership_microtests PROPERTIES
+        CUDA_ARCHITECTURES "${HELIX_CUDA_ARCHITECTURES}"
+    )
+
+    helix_add_test(
+        NAME develop_stream_ownership_microtests
+        TARGET develop_stream_ownership_microtests
+        LABELS cuda
+        GPU
+        TIMEOUT 30
+    )
+
     add_executable(diagonal_hamiltonian_commutator_cuda_tests
         tests/cuda/diagonal_hamiltonian_commutator_tests.cu
         src/cuda_sparse_backend_plan.cu
