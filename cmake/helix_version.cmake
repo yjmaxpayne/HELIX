@@ -1,4 +1,4 @@
-set(HELIX_VERSION_FALLBACK "0.0.3" CACHE STRING "Fallback HELIX version when no release tag is available")
+set(HELIX_VERSION_FALLBACK "0.0.4" CACHE STRING "Fallback HELIX version when no release tag is available")
 set(HELIX_RELEASE_VERSION "" CACHE STRING "Explicit HELIX release version, usually vMAJOR.MINOR.PATCH")
 
 function(helix_set_version_from_string candidate source)

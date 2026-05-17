@@ -12,6 +12,23 @@ python -m pip install -e ".[release]"
 cz changelog --incremental
 ```
 
+## v0.0.4 (2026-05-17)
+
+### Feat
+
+- **heom**: default HELIX_CUSPARSE_REUSE_PLAN=0 (R1 recovery)
+- **research**: add /research-resume shell fallback (L3)
+- **benchmark**: add T11 pure timing ablation harness
+- **benchmark**: add legacy spin-glass before/after runner
+
+### Perf
+
+- **heom**: specialize diagonal Hamiltonian path
+
+### Fix
+
+- **benchmark**: align cuSPARSE reuse-plan default mirror with R1 production rollback
+
 ## v0.0.3 (2026-05-14)
 
 ### Feat
