@@ -486,6 +486,41 @@ if(HELIX_BUILD_TESTS)
         TIMEOUT 30
     )
 
+    # v0.0.5 perf-tightening M2 — CUDA Graph capture spike (evidence-only).
+    # NOT in default CTest selector (label `benchmark` is excluded by
+    # `-LE "^(sanitizer|benchmark)$"`); see
+    # `.plan/research/v005-perf-tightening/program.md §3.2`.
+    add_executable(legacy_spin_glass_graph_spike
+        tests/benchmark/legacy_spin_glass_graph_spike.cu
+    )
+
+    target_link_libraries(legacy_spin_glass_graph_spike PRIVATE
+        helix_core
+        CUDA::cudart
+    )
+
+    target_include_directories(legacy_spin_glass_graph_spike PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+
+    target_compile_definitions(legacy_spin_glass_graph_spike PRIVATE
+        HELIX_BENCHMARK_DEFAULT_OUTPUT_DIR="${CMAKE_CURRENT_BINARY_DIR}/benchmark/graph-spike"
+    )
+
+    set_target_properties(legacy_spin_glass_graph_spike PROPERTIES
+        CUDA_ARCHITECTURES "${HELIX_CUDA_ARCHITECTURES}"
+        CUDA_SEPARABLE_COMPILATION ON
+        CUDA_RESOLVE_DEVICE_SYMBOLS ON
+    )
+
+    helix_add_test(
+        NAME v005_cuda_graph_spike_gate
+        TARGET legacy_spin_glass_graph_spike
+        LABELS benchmark
+        GPU
+        TIMEOUT 120
+    )
+
     add_executable(public_lifecycle_context_tests
         tests/numerical/public_lifecycle_context_tests.cu
     )
