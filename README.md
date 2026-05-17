@@ -58,7 +58,10 @@ HELIX_BENCHMARK_WITH_NSIGHT=systems examples/benchmark/legacy_spin_glass/run.sh
 
 Artifacts default to `build/cmake/example-benchmark/legacy_spin_glass/`. A
 captured sample result is checked in under
-`examples/benchmark/legacy_spin_glass/reference/` for format inspection.
+`examples/benchmark/legacy_spin_glass/reference/` for format inspection. The
+summary records the CUDA backend decisions, including the structured `V`
+specialization decision for the legacy spin-glass path; benchmark data is trend
+evidence only and has no default speed threshold.
 
 ## C++ API
 

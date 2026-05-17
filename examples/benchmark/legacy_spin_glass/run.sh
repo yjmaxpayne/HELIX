@@ -38,10 +38,16 @@ Environment:
   HELIX_BUILD_DIR                 Build tree, default: build/cmake
   HELIX_BENCHMARK_OUTPUT_DIR      Artifact root, default: <build>/example-benchmark/legacy_spin_glass
   HELIX_BENCHMARK_WITH_NSIGHT     off | systems | nsys, default: off
+  HELIX_BENCHMARK_CAPTURE_CALIBRATION  1 | 0, default: 1
+  HELIX_CUSPARSE_REUSE_PLAN       1 | 0, default: 1
   HELIX_BENCHMARK_CORRECTNESS_GATE_STATUS  not_run | passed | failed, default: not_run
   HELIX_BENCHMARK_BASELINE_GATE_STATUS     not_run | passed | failed, default: not_run
   HELIX_NSYS                      Optional path to nsys
 
+Set HELIX_BENCHMARK_CAPTURE_CALIBRATION=0 for a main-only benchmark artifact.
+The default records main measurement plus a separate calibration scope.
+Set HELIX_CUSPARSE_REUSE_PLAN=0 only for rollback triage; that mode routes
+through the legacy compatibility wrappers and is not the performance evidence path.
 Nsight launches are sanitized by removing environment variables whose names
 contain KEY, TOKEN, SECRET, PASSWORD, or CREDENTIAL before profiling.
 USAGE

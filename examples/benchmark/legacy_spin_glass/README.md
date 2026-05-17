@@ -28,6 +28,32 @@ HELIX_BENCHMARK_OUTPUT_DIR="$(mktemp -d)" \
   examples/benchmark/legacy_spin_glass/run.sh
 ```
 
+Generate a main-only artifact without running the HEOMSolver calibration
+cross-check:
+
+```sh
+HELIX_BENCHMARK_CAPTURE_CALIBRATION=0 \
+  examples/benchmark/legacy_spin_glass/run.sh
+```
+
+The default is main measurement plus calibration capture:
+
+```sh
+HELIX_BENCHMARK_CAPTURE_CALIBRATION=1 \
+  examples/benchmark/legacy_spin_glass/run.sh
+```
+
+In both modes the JSONL and Markdown summary record
+`measurement_scope.main_measurement_scope`, `measurement_scope.calibration_scope`,
+`measurement_scope.calibration_captured`, and
+`measurement_scope.calibration_excluded_from_main`. Calibration timing is not
+included in the main timing aggregation.
+
+For rollback triage, set `HELIX_CUSPARSE_REUSE_PLAN=0` to disable the reusable
+cuSPARSE backend plan and route sparse calls through the legacy compatibility
+wrappers. Do not use that mode as the performance evidence path; it restores
+per-call wrapper setup.
+
 Use Nsight Systems when `nsys` is available:
 
 ```sh
@@ -55,7 +81,11 @@ The `reference/` directory contains one captured sample from the maintainer
 machine so users can inspect the JSONL and Markdown summary formats before
 running the benchmark locally. Raw Nsight reports are intentionally excluded
 because profiler captures can embed environment variables and local paths. The
-directory includes `test_results/` with the
+Markdown summary records the `H_DIAGONAL` elementwise specialization comparison
+and the default steady SpMM count after the diagonal Hamiltonian term leaves the
+cuSPARSE path. It also records the structured `V` specialization decision as
+`defer_legacy_spin_glass_only`, with `System::from_sparse()` remaining
+validation-only and unaffected. The directory includes `test_results/` with the
 ordinary correctness, explicit benchmark, quick baseline, full baseline,
-Python-smoke status, and Nsight-capture evidence that justify the sample's gate
-status fields. Timing values are machine-dependent.
+Python-smoke status, and Nsight optional-capture status that justify the
+sample's gate status fields. Timing values are machine-dependent.
