@@ -249,20 +249,22 @@ std::size_t positiveSizeEnvOrDefault(const char* name, std::size_t fallback)
 
 bool cusparseReusePlanEnabledFromEnv()
 {
+	// Mirror src/liouville.cu sparseBackendPlanEnabled(): R1 rollback default is opt-in.
+	// When the env var is unset, the production path uses the legacy wrapper, so the
+	// reuse-plan steady-state assertions (descriptor_create_count==0, etc.) do not apply.
 	const auto value = optionalEnv("HELIX_CUSPARSE_REUSE_PLAN");
 	if(!value.has_value())
 	{
-		return true;
+		return false;
 	}
-	return !(*value == "0"
-		|| *value == "false"
-		|| *value == "False"
-		|| *value == "FALSE"
-		|| *value == "off"
-		|| *value == "OFF"
-		|| *value == "no"
-		|| *value == "NO"
-		|| *value == "legacy");
+	return *value == "1"
+		|| *value == "true"
+		|| *value == "True"
+		|| *value == "TRUE"
+		|| *value == "on"
+		|| *value == "ON"
+		|| *value == "yes"
+		|| *value == "YES";
 }
 
 const char* timingModeName(bool collectBackendProfiling) noexcept
