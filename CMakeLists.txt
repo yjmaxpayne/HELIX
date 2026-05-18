@@ -819,6 +819,34 @@ if(HELIX_BUILD_TESTS)
         TIMEOUT 30
     )
 
+    # M3.2 H-3.2.1 mechanism microtest: cudaEventRecord + cudaStreamWaitEvent
+    # fan-in topology across N owned streams. Mirrors the helpers in
+    # src/liouville.cu (sparseStreamFanInToZero / FanOutFromZero).
+    add_executable(event_based_sync_microtests
+        tests/cuda/event_based_sync_microtests.cu
+    )
+
+    target_link_libraries(event_based_sync_microtests PRIVATE
+        helix_test_support
+        CUDA::cudart
+    )
+
+    target_include_directories(event_based_sync_microtests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+
+    set_target_properties(event_based_sync_microtests PROPERTIES
+        CUDA_ARCHITECTURES "${HELIX_CUDA_ARCHITECTURES}"
+    )
+
+    helix_add_test(
+        NAME event_based_sync_microtests
+        TARGET event_based_sync_microtests
+        LABELS cuda
+        GPU
+        TIMEOUT 30
+    )
+
     add_executable(diagonal_hamiltonian_commutator_cuda_tests
         tests/cuda/diagonal_hamiltonian_commutator_tests.cu
         src/cuda_sparse_backend_plan.cu
