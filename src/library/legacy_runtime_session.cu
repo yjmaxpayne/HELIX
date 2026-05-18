@@ -85,9 +85,17 @@ void LegacyRuntimeSession::run_steps(std::size_t steps)
 	// readers (ResultExtractor / energy print) sync via their own D->H copy.
 	// Removed so capture mode is not broken by a host-blocking fence between
 	// the only API call the M2 spike makes inside cudaStreamBeginCapture.
+	//
+	// M3.4 H-3.4.1: HELIX_DEBUG_SYNC_MODE=on re-adds the fence for first-error
+	// attribution during migration. Off by default.
+	const bool debugSync = helixDebugSyncEnabled();
 	for(std::size_t step = 0; step < steps; ++step)
 	{
 		develop();
+		if(debugSync)
+		{
+			cudaDeviceSynchronize();
+		}
 	}
 }
 

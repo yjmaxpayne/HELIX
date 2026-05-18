@@ -597,6 +597,10 @@ void develop()
 				cudaStreamWaitEvent(streams[i], devEvt, 0);
 			}
 		}
+		if(helixDebugSyncEnabled())
+		{
+			cudaDeviceSynchronize();
+		}
 		std::swap(current,next);
 	}
 	cudaMemcpyAsync(
@@ -820,6 +824,10 @@ void getdRhoSparse(const device_vector<Complex>& rhoVec,device_vector<Complex>& 
 	ensureSparseStreamEvents(hierarchySize);
 	sparseStreamFanInToZero(streams);
 	sparseStreamFanOutFromZero(streams);
+	if(helixDebugSyncEnabled())
+	{
+		cudaDeviceSynchronize();
+	}
 	for(int i=0;i<hierarchySize;i++)
 	{
 		int index=i;
@@ -869,6 +877,10 @@ void getdRhoSparse(const device_vector<Complex>& rhoVec,device_vector<Complex>& 
 	// fan-in to streams[0]; caller (develop) bridges streams[0] to its own
 	// stream via sparseRendezvousEvent.
 	sparseStreamFanInToZero(streams);
+	if(helixDebugSyncEnabled())
+	{
+		cudaDeviceSynchronize();
+	}
 }
 
 void clearLiouvilleStorage()
