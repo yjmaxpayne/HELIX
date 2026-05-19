@@ -12,6 +12,14 @@ python -m pip install -e ".[release]"
 cz changelog --incremental
 ```
 
+## v0.0.5 (2026-05-19)
+
+### Feat
+
+- **liouville**: M3.4 H-3.4.1 HELIX_DEBUG_SYNC_MODE env-var opt-in
+- **liouville,session**: M3.2 H-3.2.1 event-based sync replaces cudaDeviceSync
+- **liouville**: M3.1 H-3.1.1 cudaMemcpyAsync stream migration
+
 ## v0.0.4 (2026-05-17)
 
 ### Feat
