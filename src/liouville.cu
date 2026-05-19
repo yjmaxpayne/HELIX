@@ -95,6 +95,73 @@ bool& sparseInitialized()
 	return value;
 }
 
+// M3.2 H-3.2.1 event pool — capture-friendly replacement for the three
+// `cudaDeviceSynchronize()` fences identified by M2 (liouville.cu:495, 703,
+// 749 pre-M3.1; renumbered after M3.1's patch). Singletons join the existing
+// liouville.cu file-scope pattern (E21); to be absorbed into Context::Impl
+// by M3.3 together with the rest of the storage singletons.
+host_vector<cudaEvent_t>& sparseStreamEvents()
+{
+	static host_vector<cudaEvent_t> values;
+	return values;
+}
+
+cudaEvent_t& sparseRendezvousEvent()
+{
+	static cudaEvent_t value = nullptr;
+	return value;
+}
+
+cudaEvent_t& developStreamEvent()
+{
+	static cudaEvent_t value = nullptr;
+	return value;
+}
+
+void ensureSparseStreamEvents(int streamCount)
+{
+	host_vector<cudaEvent_t>& events = sparseStreamEvents();
+	for(std::size_t i = events.size(); i < static_cast<std::size_t>(streamCount); ++i)
+	{
+		cudaEvent_t e = nullptr;
+		cudaEventCreateWithFlags(&e, cudaEventDisableTiming);
+		events.push_back(e);
+	}
+	if(sparseRendezvousEvent() == nullptr)
+	{
+		cudaEventCreateWithFlags(&sparseRendezvousEvent(), cudaEventDisableTiming);
+	}
+	if(developStreamEvent() == nullptr)
+	{
+		cudaEventCreateWithFlags(&developStreamEvent(), cudaEventDisableTiming);
+	}
+}
+
+// Fan-in: streams[1..N-1] signal their per-stream event; streams[0] waits them
+// all. After this call, streams[0] is the convergence point (its next recorded
+// event captures all per-hierarchy work).
+void sparseStreamFanInToZero(host_vector<cudaStream_t>& streams)
+{
+	host_vector<cudaEvent_t>& events = sparseStreamEvents();
+	for(std::size_t i = 1; i < streams.size(); ++i)
+	{
+		cudaEventRecord(events[i], streams[i]);
+		cudaStreamWaitEvent(streams[0], events[i], 0);
+	}
+}
+
+// Fan-out: streams[1..N-1] catch up to streams[0]'s last enqueue via a single
+// shared rendezvous event recorded on streams[0].
+void sparseStreamFanOutFromZero(host_vector<cudaStream_t>& streams)
+{
+	cudaEvent_t rendezvous = sparseRendezvousEvent();
+	cudaEventRecord(rendezvous, streams[0]);
+	for(std::size_t i = 1; i < streams.size(); ++i)
+	{
+		cudaStreamWaitEvent(streams[i], rendezvous, 0);
+	}
+}
+
 void recordLegacyWrapperSpmmSuccess() noexcept
 {
 	helix::library::BackendSpmmProfilingCounters counters;
@@ -475,11 +542,29 @@ void develop()
 	device_vector<Complex>& B=developBStorage();
 	if(F.size()!=rhoSize){ F.resize(rhoSize); }
 	if(B.size()!=rhoSize){ B.resize(rhoSize); }
-	F=dRho;
+
+	// M3.1 H-3.1.1: migrate develop()'s D2D copies off the CUDA legacy default
+	// stream onto an owned non-zero stream, and bind cublasHandle to the same
+	// stream so the whole loop dispatches on a capture-friendly stream. This
+	// function-scope static is absorbed into Context::Impl by segment 3.
+	static cudaStream_t developCopyStream = nullptr;
+	if(developCopyStream == nullptr)
+	{
+		cudaStreamCreate(&developCopyStream);
+		cublasSetStream(cublasHandle, developCopyStream);
+	}
+
+	cudaMemcpyAsync(
+		raw_pointer_cast(F.data()),
+		raw_pointer_cast(dRho.data()),
+		sizeof(Complex) * static_cast<std::size_t>(rhoSize),
+		cudaMemcpyDeviceToDevice,
+		developCopyStream);
 	recordFullHierarchyD2DCopy(static_cast<std::size_t>(rhoSize));
 	static Complex one=make_Complex(1.0,0.0);
 	device_vector<Complex>* current=&dRho;
 	device_vector<Complex>* next=&B;
+	host_vector<cudaStream_t>& streams = sparseStreams();
 	for(int j=1;j<=m;j++)
 	{
 		Complex tj=make_Complex(t/j,0.0);
@@ -488,14 +573,42 @@ void develop()
 #else
 		getdRhoSparse(*current,*next);
 #endif
+		// M3.2 H-3.2.1: bridge sparseStreams[0] (now the convergence after
+		// getdRhoSparse's internal fan-in) into developCopyStream so the
+		// upcoming cublasScal / cublasAxpy serialize after sparse work.
+		ensureSparseStreamEvents(static_cast<int>(streams.size()));
+		cudaEvent_t rendezvous = sparseRendezvousEvent();
+		cudaEventRecord(rendezvous, streams[0]);
+		cudaStreamWaitEvent(developCopyStream, rendezvous, 0);
+
 		cublasError(cublasScal(cublasHandle,rhoSize,&tj,raw_pointer_cast(next->data()),1));
 
 		cublasError(cublasAxpy(cublasHandle,rhoSize,&one,raw_pointer_cast(next->data()),1,raw_pointer_cast(F.data()),1));
 
-		cudaDeviceSynchronize();
+		// M3.2 H-3.2.1: replace the Taylor-loop fence (was cudaDeviceSynchronize)
+		// with an event chain so the next iteration's getdRhoSparse waits the
+		// just-recorded developCopyStream work without a host-side block.
+		if(j < m)
+		{
+			cudaEvent_t devEvt = developStreamEvent();
+			cudaEventRecord(devEvt, developCopyStream);
+			for(std::size_t i = 0; i < streams.size(); ++i)
+			{
+				cudaStreamWaitEvent(streams[i], devEvt, 0);
+			}
+		}
+		if(helixDebugSyncEnabled())
+		{
+			cudaDeviceSynchronize();
+		}
 		std::swap(current,next);
 	}
-	copy(F.begin(),F.end(),dRho.begin());
+	cudaMemcpyAsync(
+		raw_pointer_cast(dRho.data()),
+		raw_pointer_cast(F.data()),
+		sizeof(Complex) * static_cast<std::size_t>(rhoSize),
+		cudaMemcpyDeviceToDevice,
+		developCopyStream);
 	recordFullHierarchyD2DCopy(static_cast<std::size_t>(rhoSize));
 
 	//RK4
@@ -675,7 +788,12 @@ void getdRhoSparse(const device_vector<Complex>& rhoVec,device_vector<Complex>& 
 	Complex* pdRho=raw_pointer_cast(drhoVec.data());
 	int n =Param::N;
 	Complex* buffer=raw_pointer_cast(dBuffer.data());
-	host_vector<int> edges=dHierarchyEdge;
+	// M3.1 H-3.1.1 (extended scope): hierarchy edges are static after
+	// initializeHierarchyStorage(); cache them once to eliminate the per-step
+	// thrust D->H copy on the legacy default stream that the M2 spike newly
+	// surfaced after develop()'s D2D copies were migrated. Function-scope
+	// static; absorbed into Context::Impl by segment 3.
+	static host_vector<int> edges=dHierarchyEdge;
 	int kMax=Param::KMax;
 	int vSize=dVElements.size();
 	std::vector<SparseBackendPlanSet>& backendPlans=sparseBackendPlans();
@@ -700,7 +818,16 @@ void getdRhoSparse(const device_vector<Complex>& rhoVec,device_vector<Complex>& 
 			raw_pointer_cast(dVElements.data()),raw_pointer_cast(dVColumns.data()),raw_pointer_cast(dVOffsets.data()),
 			vSize,pRho+index*n*n,pOne,n,buffer+index*n*n);
 	}
-	cudaDeviceSynchronize();
+	// M3.2 H-3.2.1: replace stage barrier (was cudaDeviceSynchronize) with
+	// fan-in to streams[0] + fan-out back to all streams; loop 2 cross-writes
+	// `buffer` regions so the original semantics are preserved.
+	ensureSparseStreamEvents(hierarchySize);
+	sparseStreamFanInToZero(streams);
+	sparseStreamFanOutFromZero(streams);
+	if(helixDebugSyncEnabled())
+	{
+		cudaDeviceSynchronize();
+	}
 	for(int i=0;i<hierarchySize;i++)
 	{
 		int index=i;
@@ -746,7 +873,14 @@ void getdRhoSparse(const device_vector<Complex>& rhoVec,device_vector<Complex>& 
 	#endif
 
 	}
-	cudaDeviceSynchronize();
+	// M3.2 H-3.2.1: replace exit barrier (was cudaDeviceSynchronize) with
+	// fan-in to streams[0]; caller (develop) bridges streams[0] to its own
+	// stream via sparseRendezvousEvent.
+	sparseStreamFanInToZero(streams);
+	if(helixDebugSyncEnabled())
+	{
+		cudaDeviceSynchronize();
+	}
 }
 
 void clearLiouvilleStorage()

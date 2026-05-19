@@ -486,6 +486,41 @@ if(HELIX_BUILD_TESTS)
         TIMEOUT 30
     )
 
+    # v0.0.5 perf-tightening M2 — CUDA Graph capture spike (evidence-only).
+    # NOT in default CTest selector (label `benchmark` is excluded by
+    # `-LE "^(sanitizer|benchmark)$"`); see
+    # `.plan/research/v005-perf-tightening/program.md §3.2`.
+    add_executable(legacy_spin_glass_graph_spike
+        tests/benchmark/legacy_spin_glass_graph_spike.cu
+    )
+
+    target_link_libraries(legacy_spin_glass_graph_spike PRIVATE
+        helix_core
+        CUDA::cudart
+    )
+
+    target_include_directories(legacy_spin_glass_graph_spike PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+
+    target_compile_definitions(legacy_spin_glass_graph_spike PRIVATE
+        HELIX_BENCHMARK_DEFAULT_OUTPUT_DIR="${CMAKE_CURRENT_BINARY_DIR}/benchmark/graph-spike"
+    )
+
+    set_target_properties(legacy_spin_glass_graph_spike PROPERTIES
+        CUDA_ARCHITECTURES "${HELIX_CUDA_ARCHITECTURES}"
+        CUDA_SEPARABLE_COMPILATION ON
+        CUDA_RESOLVE_DEVICE_SYMBOLS ON
+    )
+
+    helix_add_test(
+        NAME v005_cuda_graph_spike_gate
+        TARGET legacy_spin_glass_graph_spike
+        LABELS benchmark
+        GPU
+        TIMEOUT 120
+    )
+
     add_executable(public_lifecycle_context_tests
         tests/numerical/public_lifecycle_context_tests.cu
     )
@@ -755,6 +790,61 @@ if(HELIX_BUILD_TESTS)
         LABELS cuda
         GPU
         TIMEOUT 60
+    )
+
+    # M3.1 H-3.1.1 mechanism microtest: cudaMemcpyAsync D2D on an owned non-zero
+    # stream. Mirrors the develop() patch at src/liouville.cu:478,498 region.
+    add_executable(develop_stream_ownership_microtests
+        tests/cuda/develop_stream_ownership_microtests.cu
+    )
+
+    target_link_libraries(develop_stream_ownership_microtests PRIVATE
+        helix_test_support
+        CUDA::cudart
+    )
+
+    target_include_directories(develop_stream_ownership_microtests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+
+    set_target_properties(develop_stream_ownership_microtests PROPERTIES
+        CUDA_ARCHITECTURES "${HELIX_CUDA_ARCHITECTURES}"
+    )
+
+    helix_add_test(
+        NAME develop_stream_ownership_microtests
+        TARGET develop_stream_ownership_microtests
+        LABELS cuda
+        GPU
+        TIMEOUT 30
+    )
+
+    # M3.2 H-3.2.1 mechanism microtest: cudaEventRecord + cudaStreamWaitEvent
+    # fan-in topology across N owned streams. Mirrors the helpers in
+    # src/liouville.cu (sparseStreamFanInToZero / FanOutFromZero).
+    add_executable(event_based_sync_microtests
+        tests/cuda/event_based_sync_microtests.cu
+    )
+
+    target_link_libraries(event_based_sync_microtests PRIVATE
+        helix_test_support
+        CUDA::cudart
+    )
+
+    target_include_directories(event_based_sync_microtests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+
+    set_target_properties(event_based_sync_microtests PROPERTIES
+        CUDA_ARCHITECTURES "${HELIX_CUDA_ARCHITECTURES}"
+    )
+
+    helix_add_test(
+        NAME event_based_sync_microtests
+        TARGET event_based_sync_microtests
+        LABELS cuda
+        GPU
+        TIMEOUT 30
     )
 
     add_executable(diagonal_hamiltonian_commutator_cuda_tests

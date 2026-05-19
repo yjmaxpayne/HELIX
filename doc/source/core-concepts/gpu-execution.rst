@@ -52,13 +52,31 @@ bridge cuSPARSE descriptor order and the legacy dense buffer semantics, but
 Synchronization and CUDA Graphs
 -------------------------------
 
-The current production path still uses device-wide synchronization as explicit
-correctness, dependency, and error boundaries around ``develop()``,
-``getdRhoSparse()``, ``LegacyRuntimeSession::run_steps()``, and storage teardown.
-The benchmark summary records the T8 synchronization audit and marks fixed-shape
-CUDA Graph capture as ``defer_fixed_shape_capture`` for v0.0.4. Any future graph
-path must first replace hot-path device fences with tested stream/event
-dependencies while preserving a debug sync mode for first-failure attribution.
+``develop()`` and ``getdRhoSparse()`` synchronize through CUDA events on the
+hot path instead of device-wide fences. Three file-scope event-pool
+singletons in ``liouville.cu`` — ``sparseStreamEvents`` (per-stream),
+``sparseRendezvousEvent`` (shared rendezvous), and ``developStreamEvent`` —
+are created lazily by ``ensureSparseStreamEvents()`` with
+``cudaEventDisableTiming``. The helpers ``sparseStreamFanInToZero`` and
+``sparseStreamFanOutFromZero`` implement a fan-in / fan-out rendezvous
+across the per-hierarchy streams: ``getdRhoSparse``'s stage and exit
+barriers fan all streams into ``streams[0]``, ``develop()`` then bridges
+``streams[0]`` into ``developCopyStream`` through ``sparseRendezvousEvent``,
+and the next Taylor iteration chains through ``developStreamEvent``. The
+per-step outer fence inside ``LegacyRuntimeSession::run_steps()`` has been
+removed; subsequent ``develop()`` calls serialize naturally on
+``developCopyStream`` and host readers sync through their own D-to-H
+copies. ``cudaDeviceSynchronize()`` is retained only at storage teardown.
+
+Set ``HELIX_DEBUG_SYNC_MODE=on`` to re-add defensive
+``cudaDeviceSynchronize()`` calls alongside the event path at the four
+Segment-2 fence sites for first-failure attribution; debug mode
+intentionally blocks CUDA Graph capture. See
+:doc:`../development/build-and-test` for the full env-var contract. The
+benchmark summary records the T8 synchronization audit and the
+fixed-shape CUDA Graph feasibility decision; ``v005_cuda_graph_spike_gate``
+(label ``benchmark``) is the dedicated capture-replay evidence gate and is
+excluded from the default CTest selector.
 
 Dynamic dense path
 ------------------
