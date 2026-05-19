@@ -175,6 +175,26 @@ current benchmark contract has no speed threshold; timing changes should be
 interpreted as trend evidence for later backend design, not as automatic
 correctness failures.
 
+v0.0.5 CUDA Graph spike gate
+----------------------------
+
+``v005_cuda_graph_spike_gate`` registers the
+``legacy_spin_glass_graph_spike`` binary
+(``tests/benchmark/legacy_spin_glass_graph_spike.cu``) under label
+``benchmark`` with ``RESOURCE_LOCK gpu``. It captures a fixed-shape
+``develop()`` trace through ``cudaStreamBeginCapture`` and replays it as a
+CUDA Graph to collect the M2 capture-feasibility evidence required by the
+v0.0.5 stream-aware execution plan. The keep-state contract with
+``HELIX_DEBUG_SYNC_MODE`` unset (off) is ``verdict=captured`` and
+``graph_non_null=true``; the gate explicitly depends on the env var being
+off because additive ``cudaDeviceSynchronize()`` is forbidden inside
+``cudaStreamBeginCapture``.
+
+The gate is excluded from the default selector
+``ctest -LE "^(sanitizer|benchmark)$"``. Invoke it explicitly with
+``ctest -L benchmark`` (or by name with ``-R v005_cuda_graph_spike_gate``)
+and leave ``HELIX_DEBUG_SYNC_MODE`` unset.
+
 JSONL schema
 ------------
 
@@ -316,7 +336,10 @@ the JSONL file. It contains:
 * structured ``V`` specialization decision for the legacy spin-glass path;
 * integrator D2D recurrence before/after comparison;
 * layout/transpose option matrix with the public row-major result-order statement;
-* synchronization audit with stream/event replacement plan;
+* synchronization audit with the landed per-stream event pool and
+  fan-in/fan-out rendezvous in ``liouville.cu``
+  (``sparseStreamEvents`` / ``sparseRendezvousEvent`` /
+  ``developStreamEvent``);
 * fixed-shape CUDA Graph feasibility decision;
 * correctness and baseline gate status;
 * structured profiling evidence slots for H-001..H-005; and
