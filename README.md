@@ -187,6 +187,13 @@ HELIX_STEPS=1000 ../cmake/helix
 
 `HELIX_STEPS` is optional. When it is unset, HELIX uses the legacy default of `1000000` steps. The legacy `HEOM_STEPS` variable is still accepted as a compatibility alias. The checked-in `examples/outputEnergy.txt` contains 1981 rows for `1980` steps plus the final output row; the default verification wrapper runs `1000` steps and compares the 1001-row prefix to keep the full baseline gate shorter.
 
+### Runtime environment variables
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `HELIX_STEPS` (alias `HEOM_STEPS`) | `1000000` | Override the number of integration steps. |
+| `HELIX_DEBUG_SYNC_MODE` | `off` | **Opt-in diagnostic only.** When set to `1`, `on`, `ON`, `true`, or `TRUE`, HELIX re-adds defensive `cudaDeviceSynchronize()` calls alongside the event-based sync path at four Segment-2 sites (Taylor-loop fence, `getdRhoSparse` stage barrier, `getdRhoSparse` exit barrier, per-step outer fence). Intended for first-error attribution during migration. ON mode **intentionally blocks CUDA Graph capture** (additive `cudaDeviceSynchronize()` inside `cudaStreamBeginCapture` is forbidden). Leave unset for production. |
+
 Generated files include:
 
 - `outputEnergy.txt`: time and energy trace
