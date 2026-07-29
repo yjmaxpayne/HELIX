@@ -56,7 +56,8 @@ enum class StatusCode {
 	UnsupportedExecution,
 	UnsupportedBath,
 	UnsupportedHierarchy,
-	ConcurrentContextUnsupported
+	ConcurrentContextUnsupported,
+	BathExponentsInvalid
 };
 
 struct Diagnostic {
@@ -105,14 +106,24 @@ struct SparseOperator {
 };
 
 struct Bath {
+	enum class Kind {
+		DrudeLorentzPade,
+		UserExponents
+	};
+
+	Kind kind = Kind::DrudeLorentzPade;
 	double inverseTemperature = 0.0;
 	double damping = 0.0;
 	double couplingStrength = 0.0;
 	std::size_t padeTerms = 0;
 	std::vector<std::complex<double>> residues;
 	std::vector<double> frequencies;
+	std::vector<std::complex<double>> exponentCoefficients;
+	std::vector<std::complex<double>> exponentRates;
 
 	static Bath drude_lorentz_pade();
+	static Bath user_exponents(std::vector<std::complex<double>> coefficients,
+		std::vector<std::complex<double>> rates);
 	Diagnostics validate_supported() const;
 };
 
@@ -222,6 +233,9 @@ private:
  * - Bath::drude_lorentz_pade() and HierarchySpec::compiled_default() support the
  *   current compiled Drude-Lorentz/Pade and hierarchy defaults; non-default fields
  *   are unsupported.
+ * - Bath::Kind::UserExponents is validation-only: invalid exponent structures
+ *   report BathExponentsInvalid and valid structures report UnsupportedBath.
+ *   The interface is frozen in v0.2-lite; execution targets Epic 32 / v0.3-lite.
  * - Precision::Single is supported. Precision::Double is unsupported
  *   (UnsupportedPrecision), target v0.3-lite.
  * - Backend::LegacyCudaSparse is supported. Backend::CudaSparse is unsupported
