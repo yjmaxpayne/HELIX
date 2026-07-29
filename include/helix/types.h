@@ -198,22 +198,43 @@ private:
 };
 
 /*
- * HELIX v0.1 public API support matrix:
+ * HELIX public API contract (pre-1.0)
  *
+ * ABI & SemVer policy:
+ * 1. Pre-1.0 header API is shape-stable and additions-only. Header paths
+ *    (helix/*.h) and the helix:: namespace are fixed.
+ * 2. Binary ABI is NOT guaranteed across releases (pimpl-based evolution);
+ *    Python wheels are rebuilt for every release.
+ * 3. StatusCode enum values are append-only and stable: never removed or
+ *    reused, never re-ordered or inserted mid-enum, and their semantics never
+ *    changed.
+ *    New validation failure modes map 1:1 to codes added with their validation
+ *    paths, never pre-allocated. Diagnostic message text is NOT part of the
+ *    stability contract.
+ * 4. RunResult fields are append-only; new fields carry default values.
+ *
+ * Support matrix (per enum value: supported / validation-only / unsupported,
+ * with target version where committed):
  * - SparseOperator/System::from_sparse is validation-only and backend-independent.
- * - helix::examples::legacy_spin_glass_system() is a compatibility adapter for the current
- *   hard-coded legacy spin-glass model, not a generic System schema.
- * - Bath::drude_lorentz_pade() and HierarchySpec::compiled_default() map the current compiled
- *   Drude-Lorentz/Pade and hierarchy defaults; non-default fields report constrained/unsupported
- *   diagnostics in v0.1.
- * - Precision::Single is the only accepted v0.1 runtime precision; Precision::Double reports
- *   UnsupportedPrecision.
- * - Backend::LegacyCudaSparse is the only accepted v0.1 runtime backend option; CpuReference and
- *   CudaSparse report UnsupportedBackend until dedicated execution paths exist.
- * - Arbitrary sparse HEOM execution is not wired to the legacy runtime in v0.1. HEOMSolver reports
- *   UnsupportedExecution instead of silently running the hard-coded legacy adapter.
- * - Concurrent contexts are explicitly unsupported in v0.1 and report
- *   ConcurrentContextUnsupported.
+ * - SystemKind::LegacySpinGlass is supported through
+ *   helix::examples::legacy_spin_glass_system(), a compatibility adapter for the
+ *   current hard-coded model rather than a generic System schema.
+ * - Bath::drude_lorentz_pade() and HierarchySpec::compiled_default() support the
+ *   current compiled Drude-Lorentz/Pade and hierarchy defaults; non-default fields
+ *   are unsupported.
+ * - Precision::Single is supported. Precision::Double is unsupported
+ *   (UnsupportedPrecision), target v0.3-lite.
+ * - Backend::LegacyCudaSparse is supported. Backend::CudaSparse is unsupported
+ *   (UnsupportedBackend), target v0.2-lite; Backend::CpuReference is unsupported
+ *   and deferred/non-target until v1.x.
+ * - SystemKind::Sparse construction is validation-only; execution is unsupported
+ *   (UnsupportedExecution), target v1.0-minimal for the EmuPlat spin-boson/Drude
+ *   scenario and v1.x for full support. SystemKind::Dense is validation-only and
+ *   deferred to the non-default v1.x route. ResultMode::FinalState is supported
+ *   on the legacy path; ObservableTrace and Trajectory are validation-only
+ *   (UnsupportedExecution) and uncommitted.
+ * - Concurrent contexts are unsupported (ConcurrentContextUnsupported) and
+ *   deferred/unscheduled until v1.x.
  */
 
 } // namespace helix
