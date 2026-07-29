@@ -91,3 +91,4 @@ Makefile
 *.tar.gz
 *.zip
 *.egg-info/
+*tmp/
