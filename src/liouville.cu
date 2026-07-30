@@ -1,12 +1,12 @@
 #include "liouville.h"
+#include "backend/cuda_blas_backend.h"
+#include "backend/cuda_sparse_backend.h"
 #include "complex_operators.h"
 #include "cuda_sparse_backend_plan.h"
 #include "cuda_types.h"
 #include "library/backend_profiling.h"
 #include "matrix_util.h"
 #include <cstddef>
-#include <cstdlib>
-#include <string>
 #include <utility>
 #include <vector>
 using thrust::copy;
@@ -162,15 +162,6 @@ void sparseStreamFanOutFromZero(host_vector<cudaStream_t>& streams)
 	}
 }
 
-void recordLegacyWrapperSpmmSuccess() noexcept
-{
-	helix::library::BackendSpmmProfilingCounters counters;
-	counters.callCount = 1;
-	counters.descriptorCreateCount = 3;
-	counters.bufferSizeQueryCount = 1;
-	helix::library::recordSpmmProfiling(counters);
-}
-
 void recordFullHierarchyD2DCopy(std::size_t elementCount) noexcept
 {
 	helix::library::BackendD2DCopyProfilingCounters counters;
@@ -210,88 +201,20 @@ HEOM_LIOUVILLE_CALLABLE __inline__ void cublasError(const cublasStatus_t& status
 	}
 }
 
-__device__ __host__ __inline__ void cusparseError(const cusparseStatus_t& status)
-{
-	if(status!=CUSPARSE_STATUS_SUCCESS){
-		printf("%d",(int)status);
-	}
-}
-
-bool sparseBackendPlanEnabled()
-{
-	static const bool enabled = [] {
-		const char* value = std::getenv("HELIX_CUSPARSE_REUSE_PLAN");
-		if(value == nullptr || value[0] == '\0')
-		{
-			return false; // R1 rollback: reusable plan opt-in only (see .plan/research/regression-recovery-and-opt/00-DESIGN.md §2)
-		}
-		const std::string setting(value);
-		return (setting == "1"
-			|| setting == "true"
-			|| setting == "True"
-			|| setting == "TRUE"
-			|| setting == "on"
-			|| setting == "ON"
-			|| setting == "yes"
-			|| setting == "YES");
-	}();
-	return enabled;
-}
-
-__host__ __inline__ cusparseStatus_t runSparsePlan(
-	helix::cuda_backend::CudaSparseBackendPlan& plan,
-	const cusparseHandle_t &handle,
-	const cudaStream_t &stream,
-	cusparseOperation_t transB,
-	int m,
-	int n,
-	int k,
-	int nnz,
-	const Complex* alpha,
-	const Complex* elements,
-	const int* offsets,
-	const int* columns,
-	const Complex* denseInput,
-	int ldb,
-	const Complex* beta,
-	Complex* denseOutput,
-	int ldc)
-{
-	if(!sparseBackendPlanEnabled())
-	{
-		const cusparseStatus_t status = cusparseCsrmmSpMM(handle,CUSPARSE_OPERATION_NON_TRANSPOSE,transB,
-			m,n,k,nnz,alpha,nullptr,elements,offsets,columns,denseInput,ldb,beta,denseOutput,ldc);
-		if(status == CUSPARSE_STATUS_SUCCESS)
-		{
-			recordLegacyWrapperSpmmSuccess();
-		}
-		return status;
-	}
-
-	helix::cuda_backend::CudaSparseSpmmArgs args;
-	args.handle = handle;
-	args.stream = stream;
-	args.transA = CUSPARSE_OPERATION_NON_TRANSPOSE;
-	args.transB = transB;
-	args.m = m;
-	args.n = n;
-	args.k = k;
-	args.nnz = nnz;
-	args.alpha = alpha;
-	args.csrValues = elements;
-	args.csrRowOffsets = offsets;
-	args.csrColumns = columns;
-	args.denseInput = denseInput;
-	args.ldb = ldb;
-	args.beta = beta;
-	args.denseOutput = denseOutput;
-	args.ldc = ldc;
-	return plan.run(args);
-}
-
 HEOM_LIOUVILLE_CALLABLE __inline__ void addMatrix(cublasHandle_t handle,int n,const Complex* k,Complex* target,const Complex* add)
 {
 	cublasError(cublasAxpy(handle,n*n,k,add,1,target,1));
+}
+
+template <typename Backend>
+__host__ __inline__ void addMatrix(Backend& backend,int n,const Complex* k,Complex* target,const Complex* add)
+{
+	helix::backend::AxpyArgs<Complex> args;
+	args.n=n*n;
+	args.alpha=k;
+	args.x=add;
+	args.y=target;
+	helix::backend::reportBlasFailure(helix::backend::axpy(backend,args));
 }
 
 
@@ -350,51 +273,87 @@ __host__ __inline__ void addAntiCommutateHost(const cublasHandle_t &handle,Compl
 	if(st1!=0||st2!=0){printf("%s","error\n");}
 }
 __host__ __inline__ void CommutateSparse(
-	helix::cuda_backend::CudaSparseBackendPlan& nonTransposePlan,
-	helix::cuda_backend::CudaSparseBackendPlan& transposePlan,
-	const cusparseHandle_t &handle,const cudaStream_t & stream,const cusparseMatDescr_t MatDescr, const Complex* elements,const int* columns,const int* offsets,const int nnz,const Complex* matrixDence,const Complex* k,const int n,Complex* result)
+	helix::backend::CudaSparseBackend& backend,
+	const cusparseMatDescr_t MatDescr, const Complex* elements,const int* columns,const int* offsets,const int nnz,const Complex* matrixDence,const Complex* k,const int n,Complex* result)
 {
 	(void)MatDescr;
-	cusparseError(runSparsePlan(nonTransposePlan,handle,stream,CUSPARSE_OPERATION_NON_TRANSPOSE,
-		n,n,n,nnz,k,elements,offsets,columns,matrixDence,n,pZero,result,n));
-	transpose(result,n,stream);
+	helix::backend::SpmmArgs<Complex> args;
+	args.transB = helix::backend::SpmmOperation::NonTranspose;
+	args.m = n;
+	args.n = n;
+	args.k = n;
+	args.nnz = nnz;
+	args.alpha = k;
+	args.csrValues = elements;
+	args.csrRowOffsets = offsets;
+	args.csrColumns = columns;
+	args.denseInput = matrixDence;
+	args.ldb = n;
+	args.beta = pZero;
+	args.denseOutput = result;
+	args.ldc = n;
+	helix::backend::reportSpmmFailure(helix::backend::spmm(backend, args));
+	transpose(result,n,backend.stream());
 
-	cusparseError(runSparsePlan(transposePlan,handle,stream,CUSPARSE_OPERATION_TRANSPOSE,
-		n,n,n,nnz,k,elements,offsets,columns,matrixDence,n,pMinusOne,result,n));
-
-	transpose(result,n,stream);
+	args.transB = helix::backend::SpmmOperation::Transpose;
+	args.beta = pMinusOne;
+	helix::backend::reportSpmmFailure(helix::backend::spmm(backend, args));
+	transpose(result,n,backend.stream());
 }
 __host__ __inline__ void addCommutateSparse(
-	helix::cuda_backend::CudaSparseBackendPlan& nonTransposePlan,
-	helix::cuda_backend::CudaSparseBackendPlan& transposePlan,
-	const cusparseHandle_t &handle,const cudaStream_t & stream,const cusparseMatDescr_t MatDescr, const Complex* elements,const int* columns,const int* offsets,const int nnz,const Complex* matrixDence,const Complex* k,const Complex* minusK,const int n,Complex* result)
+	helix::backend::CudaSparseBackend& backend,
+	const cusparseMatDescr_t MatDescr, const Complex* elements,const int* columns,const int* offsets,const int nnz,const Complex* matrixDence,const Complex* k,const Complex* minusK,const int n,Complex* result)
 {
 	(void)MatDescr;
-	cusparseError(runSparsePlan(nonTransposePlan,handle,stream,CUSPARSE_OPERATION_NON_TRANSPOSE,
-		n,n,n,nnz,minusK,elements,offsets,columns,matrixDence,n,pOne,result,n));
+	helix::backend::SpmmArgs<Complex> args;
+	args.transB = helix::backend::SpmmOperation::NonTranspose;
+	args.m = n;
+	args.n = n;
+	args.k = n;
+	args.nnz = nnz;
+	args.alpha = minusK;
+	args.csrValues = elements;
+	args.csrRowOffsets = offsets;
+	args.csrColumns = columns;
+	args.denseInput = matrixDence;
+	args.ldb = n;
+	args.beta = pOne;
+	args.denseOutput = result;
+	args.ldc = n;
+	helix::backend::reportSpmmFailure(helix::backend::spmm(backend, args));
+	transpose(result,n,backend.stream());
 
-	transpose(result,n,stream);
-
-	cusparseError(runSparsePlan(transposePlan,handle,stream,CUSPARSE_OPERATION_TRANSPOSE,
-		n,n,n,nnz,k,elements,offsets,columns,matrixDence,n,pOne,result,n));
-
-	transpose(result,n,stream);
+	args.transB = helix::backend::SpmmOperation::Transpose;
+	args.alpha = k;
+	helix::backend::reportSpmmFailure(helix::backend::spmm(backend, args));
+	transpose(result,n,backend.stream());
 }
 __host__ __inline__ void addAntiCommutateSparse(
-	helix::cuda_backend::CudaSparseBackendPlan& nonTransposePlan,
-	helix::cuda_backend::CudaSparseBackendPlan& transposePlan,
-	const cusparseHandle_t &handle,const cudaStream_t & stream,const cusparseMatDescr_t MatDescr, const Complex* elements,const int* columns,const int* offsets,const int nnz,const Complex* matrixDence,const Complex* k,const int n,Complex* result)
+	helix::backend::CudaSparseBackend& backend,
+	const cusparseMatDescr_t MatDescr, const Complex* elements,const int* columns,const int* offsets,const int nnz,const Complex* matrixDence,const Complex* k,const int n,Complex* result)
 {
 	(void)MatDescr;
-	cusparseError(runSparsePlan(nonTransposePlan,handle,stream,CUSPARSE_OPERATION_NON_TRANSPOSE,
-		n,n,n,nnz,k,elements,offsets,columns,matrixDence,n,pOne,result,n));
+	helix::backend::SpmmArgs<Complex> args;
+	args.transB = helix::backend::SpmmOperation::NonTranspose;
+	args.m = n;
+	args.n = n;
+	args.k = n;
+	args.nnz = nnz;
+	args.alpha = k;
+	args.csrValues = elements;
+	args.csrRowOffsets = offsets;
+	args.csrColumns = columns;
+	args.denseInput = matrixDence;
+	args.ldb = n;
+	args.beta = pOne;
+	args.denseOutput = result;
+	args.ldc = n;
+	helix::backend::reportSpmmFailure(helix::backend::spmm(backend, args));
+	transpose(result,n,backend.stream());
 
-	transpose(result,n,stream);
-
-	cusparseError(runSparsePlan(transposePlan,handle,stream,CUSPARSE_OPERATION_TRANSPOSE,
-		n,n,n,nnz,k,elements,offsets,columns,matrixDence,n,pOne,result,n));
-
-	transpose(result,n,stream);
+	args.transB = helix::backend::SpmmOperation::Transpose;
+	helix::backend::reportSpmmFailure(helix::backend::spmm(backend, args));
+	transpose(result,n,backend.stream());
 }
 
 __global__ void diagonalHamiltonianCommutatorKernel(
@@ -562,6 +521,7 @@ void develop()
 		developCopyStream);
 	recordFullHierarchyD2DCopy(static_cast<std::size_t>(rhoSize));
 	static Complex one=make_Complex(1.0,0.0);
+	helix::backend::CudaBlasBackend developBlasBackend(cublasHandle);
 	device_vector<Complex>* current=&dRho;
 	device_vector<Complex>* next=&B;
 	host_vector<cudaStream_t>& streams = sparseStreams();
@@ -581,9 +541,18 @@ void develop()
 		cudaEventRecord(rendezvous, streams[0]);
 		cudaStreamWaitEvent(developCopyStream, rendezvous, 0);
 
-		cublasError(cublasScal(cublasHandle,rhoSize,&tj,raw_pointer_cast(next->data()),1));
+		helix::backend::ScalArgs<Complex> scalArgs;
+		scalArgs.n=rhoSize;
+		scalArgs.alpha=&tj;
+		scalArgs.x=raw_pointer_cast(next->data());
+		helix::backend::reportBlasFailure(helix::backend::scal(developBlasBackend,scalArgs));
 
-		cublasError(cublasAxpy(cublasHandle,rhoSize,&one,raw_pointer_cast(next->data()),1,raw_pointer_cast(F.data()),1));
+		helix::backend::AxpyArgs<Complex> axpyArgs;
+		axpyArgs.n=rhoSize;
+		axpyArgs.alpha=&one;
+		axpyArgs.x=raw_pointer_cast(next->data());
+		axpyArgs.y=raw_pointer_cast(F.data());
+		helix::backend::reportBlasFailure(helix::backend::axpy(developBlasBackend,axpyArgs));
 
 		// M3.2 H-3.2.1: replace the Taylor-loop fence (was cudaDeviceSynchronize)
 		// with an event chain so the next iteration's getdRhoSparse waits the
@@ -810,11 +779,15 @@ void getdRhoSparse(const device_vector<Complex>& rhoVec,device_vector<Complex>& 
 			pdRho+index*n*n,
 			streams[i]);
 #else
-		CommutateSparse(planSet.hNonTranspose,planSet.hTranspose,sparseHandles[i],streams[i],MatDescr,
+		helix::backend::CudaSparseBackend hBackend(
+			sparseHandles[i],streams[i],planSet.hNonTranspose,planSet.hTranspose);
+		CommutateSparse(hBackend,MatDescr,
 			raw_pointer_cast(dHElements.data()),raw_pointer_cast(dHColumns.data()),raw_pointer_cast(dHOffsets.data()),
 			dHElements.size(),pRho+index*n*n,pMinusiCnt,n,pdRho+index*n*n);
 #endif
-		CommutateSparse(planSet.vNonTranspose,planSet.vTranspose,sparseHandles[i],streams[i],MatDescr,
+		helix::backend::CudaSparseBackend vBackend(
+			sparseHandles[i],streams[i],planSet.vNonTranspose,planSet.vTranspose);
+		CommutateSparse(vBackend,MatDescr,
 			raw_pointer_cast(dVElements.data()),raw_pointer_cast(dVColumns.data()),raw_pointer_cast(dVOffsets.data()),
 			vSize,pRho+index*n*n,pOne,n,buffer+index*n*n);
 	}
@@ -832,42 +805,45 @@ void getdRhoSparse(const device_vector<Complex>& rhoVec,device_vector<Complex>& 
 	{
 		int index=i;
 		int indexmMinus1=edges[index*(kMax*2+2)+kMax+1];
+		helix::backend::CudaBlasBackend blasBackend(blasHandles[index]);
 		//phi
 		for(int k=0;k<kMax+1;k++)
 		{
 			int indexkPlus1=edges[index*(kMax*2+2)+k];
-			addMatrix(blasHandles[index],n,pMinusiCnt,pdRho+index*n*n,buffer+indexkPlus1*n*n);
+			addMatrix(blasBackend,n,pMinusiCnt,pdRho+index*n*n,buffer+indexkPlus1*n*n);
 		}
 
 		//psi
 		for(int k=1;k<kMax+1;k++)
 		{
 			int indexkMinus1=edges[index*(kMax*2+2)+kMax+1+k];
-			addMatrix(blasHandles[index],n,&pCoefficients[index+hierarchySize*(k-1)],pdRho+index*n*n,buffer+indexkMinus1*n*n);
+			addMatrix(blasBackend,n,&pCoefficients[index+hierarchySize*(k-1)],pdRho+index*n*n,buffer+indexkMinus1*n*n);
 		}
 
 		//theta
-		addMatrix(blasHandles[index],n,&pCoefficients[index+hierarchySize*(kMax+1)],pdRho+index*n*n,buffer+indexmMinus1*n*n);
+		addMatrix(blasBackend,n,&pCoefficients[index+hierarchySize*(kMax+1)],pdRho+index*n*n,buffer+indexmMinus1*n*n);
 
 		//theta2
 		//addAntiCommutateHost(blasHandles[index],pdRho+index*n*n,v,pRho+indexmMinus1*n*n,&pCoefficients[index+hierarchySize*(kMax+2)],n);
 		SparseBackendPlanSet& planSet=backendPlans[i];
-		addAntiCommutateSparse(planSet.vNonTranspose,planSet.vTranspose,sparseHandles[i],streams[i],MatDescr,
+		helix::backend::CudaSparseBackend vBackend(
+			sparseHandles[i],streams[i],planSet.vNonTranspose,planSet.vTranspose);
+		addAntiCommutateSparse(vBackend,MatDescr,
 			raw_pointer_cast(dVElements.data()),raw_pointer_cast(dVColumns.data()),raw_pointer_cast(dVOffsets.data()),
 			vSize,pRho+indexmMinus1*n*n,&pCoefficients[index+hierarchySize*(kMax+2)],n,pdRho+index*n*n);
 
 		//Sigma
-		addMatrix(blasHandles[index],n,&pCoefficients[index+hierarchySize*(kMax+3)],pdRho+index*n*n,pRho+index*n*n);
+		addMatrix(blasBackend,n,&pCoefficients[index+hierarchySize*(kMax+3)],pdRho+index*n*n,pRho+index*n*n);
 
 		//Xi
 		//addCommutateHost(blasHandles[index],pdRho+index*n*n,v,buffer+index*n*n,&pCoefficients[index+hierarchySize*(kMax+4)],&pCoefficients[index+hierarchySize*(kMax+5)],n);
-		addCommutateSparse(planSet.vNonTranspose,planSet.vTranspose,sparseHandles[i],streams[i],MatDescr,
+		addCommutateSparse(vBackend,MatDescr,
 			raw_pointer_cast(dVElements.data()),raw_pointer_cast(dVColumns.data()),raw_pointer_cast(dVOffsets.data()),
 			vSize,buffer+index*n*n,&pCoefficients[index+hierarchySize*(kMax+4)],&pCoefficients[index+hierarchySize*(kMax+5)],n,pdRho+index*n*n);
 
 	#ifdef USE_COUNTER
 		//addAntiCommutateHost(blasHandles[index],pdRho+index*n*n,v,buffer+index*n*n,&pCoefficients[index+hierarchySize*(kMax+6)],n);
-		addAntiCommutateSparse(planSet.vNonTranspose,planSet.vTranspose,sparseHandles[i],streams[i],MatDescr,
+		addAntiCommutateSparse(vBackend,MatDescr,
 			raw_pointer_cast(dVElements.data()),raw_pointer_cast(dVColumns.data()),raw_pointer_cast(dVOffsets.data()),
 			vSize,buffer+index*n*n,&pCoefficients[index+hierarchySize*(kMax+6)],n,pdRho+index*n*n);
 	#endif
