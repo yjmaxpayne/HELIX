@@ -1,4 +1,5 @@
 #include "liouville.h"
+#include "backend/cuda_sparse_backend.h"
 #include "complex_operators.h"
 #include "cuda_sparse_backend_plan.h"
 #include "cuda_types.h"
@@ -217,27 +218,6 @@ __device__ __host__ __inline__ void cusparseError(const cusparseStatus_t& status
 	}
 }
 
-bool sparseBackendPlanEnabled()
-{
-	static const bool enabled = [] {
-		const char* value = std::getenv("HELIX_CUSPARSE_REUSE_PLAN");
-		if(value == nullptr || value[0] == '\0')
-		{
-			return false; // R1 rollback: reusable plan opt-in only (see .plan/research/regression-recovery-and-opt/00-DESIGN.md §2)
-		}
-		const std::string setting(value);
-		return (setting == "1"
-			|| setting == "true"
-			|| setting == "True"
-			|| setting == "TRUE"
-			|| setting == "on"
-			|| setting == "ON"
-			|| setting == "yes"
-			|| setting == "YES");
-	}();
-	return enabled;
-}
-
 __host__ __inline__ cusparseStatus_t runSparsePlan(
 	helix::cuda_backend::CudaSparseBackendPlan& plan,
 	const cusparseHandle_t &handle,
@@ -257,22 +237,11 @@ __host__ __inline__ cusparseStatus_t runSparsePlan(
 	Complex* denseOutput,
 	int ldc)
 {
-	if(!sparseBackendPlanEnabled())
-	{
-		const cusparseStatus_t status = cusparseCsrmmSpMM(handle,CUSPARSE_OPERATION_NON_TRANSPOSE,transB,
-			m,n,k,nnz,alpha,nullptr,elements,offsets,columns,denseInput,ldb,beta,denseOutput,ldc);
-		if(status == CUSPARSE_STATUS_SUCCESS)
-		{
-			recordLegacyWrapperSpmmSuccess();
-		}
-		return status;
-	}
-
-	helix::cuda_backend::CudaSparseSpmmArgs args;
-	args.handle = handle;
-	args.stream = stream;
-	args.transA = CUSPARSE_OPERATION_NON_TRANSPOSE;
-	args.transB = transB;
+	helix::backend::CudaSparseBackend backend(handle, stream, plan, plan);
+	helix::backend::SpmmArgs<Complex> args;
+	args.transB = transB == CUSPARSE_OPERATION_NON_TRANSPOSE
+		? helix::backend::SpmmOperation::NonTranspose
+		: helix::backend::SpmmOperation::Transpose;
 	args.m = m;
 	args.n = n;
 	args.k = k;
@@ -286,7 +255,8 @@ __host__ __inline__ cusparseStatus_t runSparsePlan(
 	args.beta = beta;
 	args.denseOutput = denseOutput;
 	args.ldc = ldc;
-	return plan.run(args);
+	const helix::backend::SpmmStatus status = helix::backend::spmm(backend, args);
+	return static_cast<cusparseStatus_t>(status.nativeCode);
 }
 
 HEOM_LIOUVILLE_CALLABLE __inline__ void addMatrix(cublasHandle_t handle,int n,const Complex* k,Complex* target,const Complex* add)
