@@ -1,4 +1,5 @@
 #include "liouville.h"
+#include "backend/cuda_blas_backend.h"
 #include "backend/cuda_sparse_backend.h"
 #include "complex_operators.h"
 #include "cuda_sparse_backend_plan.h"
@@ -203,6 +204,17 @@ HEOM_LIOUVILLE_CALLABLE __inline__ void cublasError(const cublasStatus_t& status
 HEOM_LIOUVILLE_CALLABLE __inline__ void addMatrix(cublasHandle_t handle,int n,const Complex* k,Complex* target,const Complex* add)
 {
 	cublasError(cublasAxpy(handle,n*n,k,add,1,target,1));
+}
+
+template <typename Backend>
+__host__ __inline__ void addMatrix(Backend& backend,int n,const Complex* k,Complex* target,const Complex* add)
+{
+	helix::backend::AxpyArgs<Complex> args;
+	args.n=n*n;
+	args.alpha=k;
+	args.x=add;
+	args.y=target;
+	helix::backend::reportBlasFailure(helix::backend::axpy(backend,args));
 }
 
 
@@ -509,6 +521,7 @@ void develop()
 		developCopyStream);
 	recordFullHierarchyD2DCopy(static_cast<std::size_t>(rhoSize));
 	static Complex one=make_Complex(1.0,0.0);
+	helix::backend::CudaBlasBackend developBlasBackend(cublasHandle);
 	device_vector<Complex>* current=&dRho;
 	device_vector<Complex>* next=&B;
 	host_vector<cudaStream_t>& streams = sparseStreams();
@@ -528,9 +541,18 @@ void develop()
 		cudaEventRecord(rendezvous, streams[0]);
 		cudaStreamWaitEvent(developCopyStream, rendezvous, 0);
 
-		cublasError(cublasScal(cublasHandle,rhoSize,&tj,raw_pointer_cast(next->data()),1));
+		helix::backend::ScalArgs<Complex> scalArgs;
+		scalArgs.n=rhoSize;
+		scalArgs.alpha=&tj;
+		scalArgs.x=raw_pointer_cast(next->data());
+		helix::backend::reportBlasFailure(helix::backend::scal(developBlasBackend,scalArgs));
 
-		cublasError(cublasAxpy(cublasHandle,rhoSize,&one,raw_pointer_cast(next->data()),1,raw_pointer_cast(F.data()),1));
+		helix::backend::AxpyArgs<Complex> axpyArgs;
+		axpyArgs.n=rhoSize;
+		axpyArgs.alpha=&one;
+		axpyArgs.x=raw_pointer_cast(next->data());
+		axpyArgs.y=raw_pointer_cast(F.data());
+		helix::backend::reportBlasFailure(helix::backend::axpy(developBlasBackend,axpyArgs));
 
 		// M3.2 H-3.2.1: replace the Taylor-loop fence (was cudaDeviceSynchronize)
 		// with an event chain so the next iteration's getdRhoSparse waits the
@@ -783,22 +805,23 @@ void getdRhoSparse(const device_vector<Complex>& rhoVec,device_vector<Complex>& 
 	{
 		int index=i;
 		int indexmMinus1=edges[index*(kMax*2+2)+kMax+1];
+		helix::backend::CudaBlasBackend blasBackend(blasHandles[index]);
 		//phi
 		for(int k=0;k<kMax+1;k++)
 		{
 			int indexkPlus1=edges[index*(kMax*2+2)+k];
-			addMatrix(blasHandles[index],n,pMinusiCnt,pdRho+index*n*n,buffer+indexkPlus1*n*n);
+			addMatrix(blasBackend,n,pMinusiCnt,pdRho+index*n*n,buffer+indexkPlus1*n*n);
 		}
 
 		//psi
 		for(int k=1;k<kMax+1;k++)
 		{
 			int indexkMinus1=edges[index*(kMax*2+2)+kMax+1+k];
-			addMatrix(blasHandles[index],n,&pCoefficients[index+hierarchySize*(k-1)],pdRho+index*n*n,buffer+indexkMinus1*n*n);
+			addMatrix(blasBackend,n,&pCoefficients[index+hierarchySize*(k-1)],pdRho+index*n*n,buffer+indexkMinus1*n*n);
 		}
 
 		//theta
-		addMatrix(blasHandles[index],n,&pCoefficients[index+hierarchySize*(kMax+1)],pdRho+index*n*n,buffer+indexmMinus1*n*n);
+		addMatrix(blasBackend,n,&pCoefficients[index+hierarchySize*(kMax+1)],pdRho+index*n*n,buffer+indexmMinus1*n*n);
 
 		//theta2
 		//addAntiCommutateHost(blasHandles[index],pdRho+index*n*n,v,pRho+indexmMinus1*n*n,&pCoefficients[index+hierarchySize*(kMax+2)],n);
@@ -810,7 +833,7 @@ void getdRhoSparse(const device_vector<Complex>& rhoVec,device_vector<Complex>& 
 			vSize,pRho+indexmMinus1*n*n,&pCoefficients[index+hierarchySize*(kMax+2)],n,pdRho+index*n*n);
 
 		//Sigma
-		addMatrix(blasHandles[index],n,&pCoefficients[index+hierarchySize*(kMax+3)],pdRho+index*n*n,pRho+index*n*n);
+		addMatrix(blasBackend,n,&pCoefficients[index+hierarchySize*(kMax+3)],pdRho+index*n*n,pRho+index*n*n);
 
 		//Xi
 		//addCommutateHost(blasHandles[index],pdRho+index*n*n,v,buffer+index*n*n,&pCoefficients[index+hierarchySize*(kMax+4)],&pCoefficients[index+hierarchySize*(kMax+5)],n);

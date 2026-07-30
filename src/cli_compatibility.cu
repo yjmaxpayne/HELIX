@@ -1,5 +1,6 @@
 #include "cli_compatibility.h"
 
+#include "backend/cuda_blas_backend.h"
 #include "complex_operators.h"
 #include "initialize.h"
 #include "library/energy_observable.h"
@@ -45,14 +46,21 @@ host_vector<Complex> copyDensityDiagonal(const device_vector<Complex>& rho)
 	static const Complex zero = make_Complex(0.0, 0.0);
 
 	device_vector<Complex> tmp(Param::N, zero);
-	cublasScal(cublasHandle, Param::N, &zero, thrust::raw_pointer_cast(tmp.data()), 1);
-	cublasAxpy(cublasHandle,
-		Param::N,
-		&one,
-		thrust::raw_pointer_cast(rho.data()),
-		Param::N + 1,
-		thrust::raw_pointer_cast(tmp.data()),
-		1);
+	helix::backend::CudaBlasBackend blasBackend(cublasHandle);
+
+	helix::backend::ScalArgs<Complex> scalArgs;
+	scalArgs.n = Param::N;
+	scalArgs.alpha = &zero;
+	scalArgs.x = thrust::raw_pointer_cast(tmp.data());
+	helix::backend::reportBlasFailure(helix::backend::scal(blasBackend, scalArgs));
+
+	helix::backend::AxpyArgs<Complex> axpyArgs;
+	axpyArgs.n = Param::N;
+	axpyArgs.alpha = &one;
+	axpyArgs.x = thrust::raw_pointer_cast(rho.data());
+	axpyArgs.incx = Param::N + 1;
+	axpyArgs.y = thrust::raw_pointer_cast(tmp.data());
+	helix::backend::reportBlasFailure(helix::backend::axpy(blasBackend, axpyArgs));
 	cudaDeviceSynchronize();
 
 	host_vector<Complex> result(Param::N);
