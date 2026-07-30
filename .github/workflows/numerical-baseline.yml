@@ -32,6 +32,19 @@ jobs:
       HELIX_STEPS: ${{ github.event.inputs.helix_steps || '1000' }}
       HELIX_CUDA_ARCHITECTURES: ${{ github.event.inputs.cuda_architectures || '89' }}
     steps:
+      - name: Warm up GitHub connectivity
+        run: |
+          for i in 1 2 3 4 5; do
+            if git ls-remote --exit-code "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git" HEAD >/dev/null 2>&1; then
+              echo "GitHub reachable on attempt ${i}."
+              exit 0
+            fi
+            echo "Attempt ${i}: GitHub not reachable yet; backing off..."
+            sleep $((i * 30))
+          done
+          echo "::error::Could not reach GitHub after 5 attempts; self-hosted runner network is down." >&2
+          exit 1
+
       - name: Check out
         uses: actions/checkout@v7
 
