@@ -30,11 +30,6 @@ public:
 	{
 	}
 
-	cudaStream_t stream() const noexcept
-	{
-		return stream_;
-	}
-
 	TransposeStatus transpose(const TransposeArgs<Scalar>& args)
 	{
 		::transpose(args.data, args.n, stream_);

@@ -293,12 +293,15 @@ __host__ __inline__ void CommutateSparse(
 	args.denseOutput = result;
 	args.ldc = n;
 	helix::backend::reportSpmmFailure(helix::backend::spmm(backend, args));
-	transpose(result,n,backend.stream());
+	helix::backend::TransposeArgs<Complex> transposeArgs;
+	transposeArgs.data = result;
+	transposeArgs.n = n;
+	helix::backend::reportTransposeFailure(helix::backend::transpose(backend, transposeArgs));
 
 	args.transB = helix::backend::SpmmOperation::Transpose;
 	args.beta = pMinusOne;
 	helix::backend::reportSpmmFailure(helix::backend::spmm(backend, args));
-	transpose(result,n,backend.stream());
+	helix::backend::reportTransposeFailure(helix::backend::transpose(backend, transposeArgs));
 }
 __host__ __inline__ void addCommutateSparse(
 	helix::backend::CudaSparseBackend& backend,
@@ -321,12 +324,15 @@ __host__ __inline__ void addCommutateSparse(
 	args.denseOutput = result;
 	args.ldc = n;
 	helix::backend::reportSpmmFailure(helix::backend::spmm(backend, args));
-	transpose(result,n,backend.stream());
+	helix::backend::TransposeArgs<Complex> transposeArgs;
+	transposeArgs.data = result;
+	transposeArgs.n = n;
+	helix::backend::reportTransposeFailure(helix::backend::transpose(backend, transposeArgs));
 
 	args.transB = helix::backend::SpmmOperation::Transpose;
 	args.alpha = k;
 	helix::backend::reportSpmmFailure(helix::backend::spmm(backend, args));
-	transpose(result,n,backend.stream());
+	helix::backend::reportTransposeFailure(helix::backend::transpose(backend, transposeArgs));
 }
 __host__ __inline__ void addAntiCommutateSparse(
 	helix::backend::CudaSparseBackend& backend,
@@ -349,11 +355,14 @@ __host__ __inline__ void addAntiCommutateSparse(
 	args.denseOutput = result;
 	args.ldc = n;
 	helix::backend::reportSpmmFailure(helix::backend::spmm(backend, args));
-	transpose(result,n,backend.stream());
+	helix::backend::TransposeArgs<Complex> transposeArgs;
+	transposeArgs.data = result;
+	transposeArgs.n = n;
+	helix::backend::reportTransposeFailure(helix::backend::transpose(backend, transposeArgs));
 
 	args.transB = helix::backend::SpmmOperation::Transpose;
 	helix::backend::reportSpmmFailure(helix::backend::spmm(backend, args));
-	transpose(result,n,backend.stream());
+	helix::backend::reportTransposeFailure(helix::backend::transpose(backend, transposeArgs));
 }
 
 __global__ void diagonalHamiltonianCommutatorKernel(
