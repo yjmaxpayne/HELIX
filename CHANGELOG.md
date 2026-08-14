@@ -12,6 +12,29 @@ python -m pip install -e ".[release]"
 cz changelog --incremental
 ```
 
+## v0.1.0 (2026-08-14)
+
+### Feat
+
+- **backend**: add host-only transpose dispatch contract
+- **backend**: add host-only level-1 BLAS dispatch contract
+- **backend**: add host-only SpMM dispatch contract
+- **api**: add validation-only user exponent baths
+
+### Fix
+
+- resolved baseline test issue
+
+### Refactor
+
+- **backend**: route materialized transpose through traits
+- **backend**: add CUDA transpose adapter
+- **backend**: route axpy/scal callers through traits
+- **backend**: add CUDA BLAS adapter
+- **backend**: route sparse wrappers through traits
+- **backend**: add CUDA SpMM adapter
+- updated .gitignore file with new rule on tmp/
+
 ## v0.0.5 (2026-05-19)
 
 ### Feat
