@@ -86,7 +86,7 @@ jobs:
 
       - name: Attest release package
         if: github.event.repository.visibility == 'public'
-        uses: actions/attest@v4.2.0
+        uses: actions/attest@v4.2.2
         with:
           subject-path: ${{ runner.temp }}/helix-dist/*.tar.gz
 
