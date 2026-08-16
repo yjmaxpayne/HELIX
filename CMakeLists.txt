@@ -441,6 +441,48 @@ if(HELIX_BUILD_TESTS)
         TIMEOUT 10
     )
 
+    add_executable(blas_backend_dispatch_tests
+        tests/unit/blas_backend_dispatch_tests.cpp
+    )
+
+    target_include_directories(blas_backend_dispatch_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+
+    # helix_test_support contributes only the tests/ include path. Keeping this
+    # target independent of helix_core and CUDA preserves the host-only gate.
+    target_link_libraries(blas_backend_dispatch_tests PRIVATE
+        helix_test_support
+    )
+
+    helix_add_test(
+        NAME blas_backend_dispatch_tests
+        TARGET blas_backend_dispatch_tests
+        LABELS unit
+        TIMEOUT 10
+    )
+
+    add_executable(transpose_backend_dispatch_tests
+        tests/unit/transpose_backend_dispatch_tests.cpp
+    )
+
+    target_include_directories(transpose_backend_dispatch_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+
+    # helix_test_support contributes only the tests/ include path. Keeping this
+    # target independent of helix_core and CUDA preserves the host-only gate.
+    target_link_libraries(transpose_backend_dispatch_tests PRIVATE
+        helix_test_support
+    )
+
+    helix_add_test(
+        NAME transpose_backend_dispatch_tests
+        TARGET transpose_backend_dispatch_tests
+        LABELS unit
+        TIMEOUT 10
+    )
+
     set(HELIX_BENCHMARK_BUILD_TYPE "${CMAKE_BUILD_TYPE}")
     if(NOT HELIX_BENCHMARK_BUILD_TYPE)
         set(HELIX_BENCHMARK_BUILD_TYPE "unknown")

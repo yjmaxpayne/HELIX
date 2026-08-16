@@ -24,6 +24,9 @@ The table below records what each named gate protects. New expected-fail gates m
 | `benchmark_schema_validation_tests` | `unit` | no | Internal `helix.benchmark.v1` sample records, JSONL emission, structured backend decisions, and schema validation stay stable. |
 | `benchmark_artifact_hygiene_tests` | `unit` | no | Benchmark artifact root resolution, legacy generated-output detection, and JSONL/summary containment are covered without a GPU. |
 | `spmm_backend_dispatch_tests` | `unit` | no | Host-only SpMM dispatch preserves every argument, failure status and diagnostic, and call count without a GPU. |
+| `blas_backend_dispatch_tests` | `unit` | no | Host-only level-1 BLAS (axpy/scal) dispatch preserves every argument, failure status and diagnostic, and call count without a GPU. |
+| `transpose_backend_dispatch_tests` | `unit` | no | Host-only materialized transpose dispatch preserves every argument, failure status and contract-level diagnostic, and call count without a GPU. |
+| `transpose_cuda_tests` | `cuda` | yes | In-place tiled square device transpose matches the host reference for TILE_DIM multiples. |
 | `v003_legacy_spin_glass_benchmark_gate` | `benchmark` | yes | Default legacy spin-glass benchmark writes `helix_benchmark.jsonl`, `helix_benchmark_summary.md`, and an `nsight/` artifact directory under the benchmark artifact root. |
 | `v003_legacy_spin_glass_benchmark_example_gate` | `benchmark` | yes | User-facing benchmark example script runs the same artifact path contract from `examples/benchmark/legacy_spin_glass/`. |
 | `v003_ctest_label_resource_lock_review` | `integration` | no | Generated CTest properties keep benchmark labels, GPU resource locking, ordinary CUDA labels, and the CI selector contract aligned. |

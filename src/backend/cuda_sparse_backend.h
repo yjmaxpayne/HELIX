@@ -1,9 +1,11 @@
 #pragma once
 
 #include "backend/spmm_backend.h"
+#include "backend/transpose_backend.h"
 #include "cuda_sparse_backend_plan.h"
 #include "cuda_types.h"
 #include "library/backend_profiling.h"
+#include "matrix_util.h"
 
 #include <cstdlib>
 #include <string>
@@ -28,9 +30,10 @@ public:
 	{
 	}
 
-	cudaStream_t stream() const noexcept
+	TransposeStatus transpose(const TransposeArgs<Scalar>& args)
 	{
-		return stream_;
+		::transpose(args.data, args.n, stream_);
+		return {};
 	}
 
 	SpmmStatus spmm(const SpmmArgs<Scalar>& args)
