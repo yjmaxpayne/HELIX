@@ -8,10 +8,21 @@
 #include <time.h>
 #include <iostream>
 #include "cuda_types.h"
+#include "library/backend_profiling.h"
 #include "matrix_util.h"
 #include "cublas_v2.h"
 
 const int TILE_DIM=32;
+
+namespace {
+void recordTransposeCall(int n) noexcept
+{
+	helix::library::BackendTransposeProfilingCounters counters;
+	counters.callCount = 1;
+	counters.bytes = static_cast<std::size_t>(n) * static_cast<std::size_t>(n) * sizeof(Complex);
+	helix::library::recordTransposeProfiling(counters);
+}
+}
 
 __global__ void transpose(Complex* idata, int n, const int blockRows )
 {
@@ -58,8 +69,13 @@ __global__ void transpose(Complex* idata, int n, const int blockRows )
 
 __host__ void transpose(Complex* idata,const int n, const cudaStream_t &stream)
 {
-	static int blockRows=8;
-	static dim3 block(n/TILE_DIM,n/TILE_DIM,1);
-	static dim3 thread(TILE_DIM,blockRows,1);
+	if(idata == nullptr || n <= 0 || n % TILE_DIM != 0)
+	{
+		return;
+	}
+	const int blockRows=8;
+	const dim3 block(n/TILE_DIM,n/TILE_DIM,1);
+	const dim3 thread(TILE_DIM,blockRows,1);
 	transpose<<<block,thread,0,stream>>>(idata,n,blockRows);
+	recordTransposeCall(n);
 }

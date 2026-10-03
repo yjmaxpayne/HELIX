@@ -7,7 +7,6 @@
 
 namespace {
 
-constexpr int kMatrixSize = 64;
 constexpr int kTileDim = 32;
 constexpr double kTolerance = 1.0e-6;
 
@@ -41,16 +40,16 @@ bool nearComplex(const Complex& lhs, const Complex& rhs)
 		&& helix::test::near(imagPart(lhs), imagPart(rhs), kTolerance);
 }
 
-void testDeviceTranspose64x64(helix::test::Reporter& test)
+void testDeviceTranspose(helix::test::Reporter& test, int matrixSize)
 {
-	static_assert(kMatrixSize % kTileDim == 0, "matrix_util transpose requires TILE_DIM multiples");
+	test.expect(matrixSize % kTileDim == 0, "matrix_util transpose test uses TILE_DIM multiples");
 
-	std::vector<Complex> input(kMatrixSize * kMatrixSize);
-	for(int row = 0; row < kMatrixSize; row++)
+	std::vector<Complex> input(matrixSize * matrixSize);
+	for(int row = 0; row < matrixSize; row++)
 	{
-		for(int column = 0; column < kMatrixSize; column++)
+		for(int column = 0; column < matrixSize; column++)
 		{
-			input[column + row * kMatrixSize] = makeValue(row, column);
+			input[column + row * matrixSize] = makeValue(row, column);
 		}
 	}
 
@@ -64,7 +63,7 @@ void testDeviceTranspose64x64(helix::test::Reporter& test)
 		cudaMemcpy(deviceMatrix, input.data(), byteCount, cudaMemcpyHostToDevice) == cudaSuccess,
 		"copies transpose input to device");
 
-	transpose(deviceMatrix, kMatrixSize, stream);
+	transpose(deviceMatrix, matrixSize, stream);
 	test.expect(cudaStreamSynchronize(stream) == cudaSuccess, "device transpose completes");
 
 	std::vector<Complex> actual(input.size());
@@ -72,12 +71,12 @@ void testDeviceTranspose64x64(helix::test::Reporter& test)
 		cudaMemcpy(actual.data(), deviceMatrix, byteCount, cudaMemcpyDeviceToHost) == cudaSuccess,
 		"copies transpose output to host");
 
-	for(int row = 0; row < kMatrixSize; row++)
+	for(int row = 0; row < matrixSize; row++)
 	{
-		for(int column = 0; column < kMatrixSize; column++)
+		for(int column = 0; column < matrixSize; column++)
 		{
-			const int index = column + row * kMatrixSize;
-			const Complex expected = input[row + column * kMatrixSize];
+			const int index = column + row * matrixSize;
+			const Complex expected = input[row + column * matrixSize];
 			if(!nearComplex(expected, actual[index]))
 			{
 				test.expect(false, mismatchMessage(index, expected, actual[index]));
@@ -98,7 +97,8 @@ int main()
 {
 	helix::test::Reporter test;
 
-	testDeviceTranspose64x64(test);
+	testDeviceTranspose(test, 32);
+	testDeviceTranspose(test, 64);
 
 	return test.finish("transpose CUDA tests");
 }

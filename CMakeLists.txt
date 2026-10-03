@@ -44,6 +44,7 @@ set_target_properties(helix_host_core PROPERTIES
 
 add_library(helix_core STATIC
     src/helix.cpp
+    src/library/backend_profiling.cpp
     src/library/energy_observable.cpp
     src/library/legacy_runtime_session.cu
     src/library/result_extractor.cu
@@ -51,6 +52,7 @@ add_library(helix_core STATIC
     src/psd/eigenvalues.cu
     src/psd/psd.cu
     src/initialize.cu
+    src/cuda_sparse_backend_plan.cu
     src/liouville.cu
     src/matrix_storage.cu
     src/matrix_util.cu
@@ -262,12 +264,13 @@ if(HELIX_BUILD_TESTS)
         set(test_labels ${HELIX_TEST_LABELS})
         if(HELIX_TEST_GPU)
             list(FIND test_labels sanitizer sanitizer_label_index)
+            list(FIND test_labels benchmark benchmark_label_index)
             list(FIND test_labels unit unit_label_index)
             if(NOT unit_label_index EQUAL -1)
                 message(FATAL_ERROR "GPU tests must not use the unit label")
             endif()
 
-            if(sanitizer_label_index EQUAL -1)
+            if(sanitizer_label_index EQUAL -1 AND benchmark_label_index EQUAL -1)
                 list(FIND test_labels cuda cuda_label_index)
                 if(cuda_label_index EQUAL -1)
                     list(APPEND test_labels cuda)
@@ -384,6 +387,201 @@ if(HELIX_BUILD_TESTS)
         TARGET api_schema_validation_tests
         LABELS unit
         TIMEOUT 10
+    )
+
+    add_executable(benchmark_schema_validation_tests
+        tests/unit/benchmark_schema_validation_tests.cpp
+    )
+
+    target_link_libraries(benchmark_schema_validation_tests PRIVATE
+        helix_core
+        helix_test_support
+    )
+
+    helix_add_test(
+        NAME benchmark_schema_validation_tests
+        TARGET benchmark_schema_validation_tests
+        LABELS unit
+        TIMEOUT 10
+    )
+
+    add_executable(benchmark_artifact_hygiene_tests
+        tests/unit/benchmark_artifact_hygiene_tests.cpp
+    )
+
+    target_link_libraries(benchmark_artifact_hygiene_tests PRIVATE
+        helix_test_support
+    )
+
+    helix_add_test(
+        NAME benchmark_artifact_hygiene_tests
+        TARGET benchmark_artifact_hygiene_tests
+        LABELS unit
+        TIMEOUT 10
+    )
+
+    add_executable(spmm_backend_dispatch_tests
+        tests/unit/spmm_backend_dispatch_tests.cpp
+    )
+
+    target_include_directories(spmm_backend_dispatch_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+
+    # helix_test_support contributes only the tests/ include path. Keeping this
+    # target independent of helix_core and CUDA preserves the host-only gate.
+    target_link_libraries(spmm_backend_dispatch_tests PRIVATE
+        helix_test_support
+    )
+
+    helix_add_test(
+        NAME spmm_backend_dispatch_tests
+        TARGET spmm_backend_dispatch_tests
+        LABELS unit
+        TIMEOUT 10
+    )
+
+    add_executable(blas_backend_dispatch_tests
+        tests/unit/blas_backend_dispatch_tests.cpp
+    )
+
+    target_include_directories(blas_backend_dispatch_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+
+    # helix_test_support contributes only the tests/ include path. Keeping this
+    # target independent of helix_core and CUDA preserves the host-only gate.
+    target_link_libraries(blas_backend_dispatch_tests PRIVATE
+        helix_test_support
+    )
+
+    helix_add_test(
+        NAME blas_backend_dispatch_tests
+        TARGET blas_backend_dispatch_tests
+        LABELS unit
+        TIMEOUT 10
+    )
+
+    add_executable(transpose_backend_dispatch_tests
+        tests/unit/transpose_backend_dispatch_tests.cpp
+    )
+
+    target_include_directories(transpose_backend_dispatch_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+
+    # helix_test_support contributes only the tests/ include path. Keeping this
+    # target independent of helix_core and CUDA preserves the host-only gate.
+    target_link_libraries(transpose_backend_dispatch_tests PRIVATE
+        helix_test_support
+    )
+
+    helix_add_test(
+        NAME transpose_backend_dispatch_tests
+        TARGET transpose_backend_dispatch_tests
+        LABELS unit
+        TIMEOUT 10
+    )
+
+    set(HELIX_BENCHMARK_BUILD_TYPE "${CMAKE_BUILD_TYPE}")
+    if(NOT HELIX_BENCHMARK_BUILD_TYPE)
+        set(HELIX_BENCHMARK_BUILD_TYPE "unknown")
+    endif()
+
+    add_executable(legacy_spin_glass_benchmark
+        tests/benchmark/legacy_spin_glass_benchmark.cu
+    )
+
+    target_link_libraries(legacy_spin_glass_benchmark PRIVATE
+        helix_core
+        helix_test_support
+        CUDA::cudart
+    )
+
+    target_include_directories(legacy_spin_glass_benchmark PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+
+    target_compile_definitions(legacy_spin_glass_benchmark PRIVATE
+        HELIX_BENCHMARK_BUILD_TYPE="${HELIX_BENCHMARK_BUILD_TYPE}"
+        HELIX_BENCHMARK_CUDA_ARCHITECTURES="${HELIX_CUDA_ARCHITECTURES}"
+        HELIX_BENCHMARK_COMPILER="${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}"
+        HELIX_BENCHMARK_DEFAULT_OUTPUT_DIR="${CMAKE_CURRENT_BINARY_DIR}/benchmark"
+    )
+
+    set_target_properties(legacy_spin_glass_benchmark PROPERTIES
+        CUDA_ARCHITECTURES "${HELIX_CUDA_ARCHITECTURES}"
+        CUDA_SEPARABLE_COMPILATION ON
+        CUDA_RESOLVE_DEVICE_SYMBOLS ON
+    )
+
+    helix_add_test(
+        NAME v003_legacy_spin_glass_benchmark_gate
+        TARGET legacy_spin_glass_benchmark
+        LABELS benchmark
+        GPU
+        TIMEOUT 180
+    )
+
+    helix_add_test(
+        NAME v003_legacy_spin_glass_benchmark_example_gate
+        COMMAND
+            ${CMAKE_COMMAND} -E env
+            HELIX_BUILD_DIR=${CMAKE_CURRENT_BINARY_DIR}
+            HELIX_BENCHMARK_OUTPUT_DIR=${CMAKE_CURRENT_BINARY_DIR}/example-benchmark/legacy_spin_glass
+            ${CMAKE_CURRENT_SOURCE_DIR}/examples/benchmark/legacy_spin_glass/run.sh
+            --no-build
+        LABELS benchmark
+        GPU
+        TIMEOUT 180
+    )
+
+    helix_add_test(
+        NAME v003_ctest_label_resource_lock_review
+        COMMAND
+            ${CMAKE_COMMAND}
+            -DHELIX_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}
+            -DHELIX_BINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}
+            -DHELIX_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
+            -DHELIX_BENCHMARK_TEST_NAME=v003_legacy_spin_glass_benchmark_gate
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/ctest_label_resource_lock_review.cmake
+        LABELS integration
+        TIMEOUT 30
+    )
+
+    # v0.0.5 perf-tightening M2 — CUDA Graph capture spike (evidence-only).
+    # NOT in default CTest selector (label `benchmark` is excluded by
+    # `-LE "^(sanitizer|benchmark)$"`); see
+    # `.plan/research/v005-perf-tightening/program.md §3.2`.
+    add_executable(legacy_spin_glass_graph_spike
+        tests/benchmark/legacy_spin_glass_graph_spike.cu
+    )
+
+    target_link_libraries(legacy_spin_glass_graph_spike PRIVATE
+        helix_core
+        CUDA::cudart
+    )
+
+    target_include_directories(legacy_spin_glass_graph_spike PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+
+    target_compile_definitions(legacy_spin_glass_graph_spike PRIVATE
+        HELIX_BENCHMARK_DEFAULT_OUTPUT_DIR="${CMAKE_CURRENT_BINARY_DIR}/benchmark/graph-spike"
+    )
+
+    set_target_properties(legacy_spin_glass_graph_spike PROPERTIES
+        CUDA_ARCHITECTURES "${HELIX_CUDA_ARCHITECTURES}"
+        CUDA_SEPARABLE_COMPILATION ON
+        CUDA_RESOLVE_DEVICE_SYMBOLS ON
+    )
+
+    helix_add_test(
+        NAME v005_cuda_graph_spike_gate
+        TARGET legacy_spin_glass_graph_spike
+        LABELS benchmark
+        GPU
+        TIMEOUT 120
     )
 
     add_executable(public_lifecycle_context_tests
@@ -632,6 +830,7 @@ if(HELIX_BUILD_TESTS)
 
     add_executable(transpose_cuda_tests
         tests/cuda/transpose_tests.cu
+        src/library/backend_profiling.cpp
         src/matrix_util.cu
     )
 
@@ -656,6 +855,95 @@ if(HELIX_BUILD_TESTS)
         TIMEOUT 60
     )
 
+    # M3.1 H-3.1.1 mechanism microtest: cudaMemcpyAsync D2D on an owned non-zero
+    # stream. Mirrors the develop() patch at src/liouville.cu:478,498 region.
+    add_executable(develop_stream_ownership_microtests
+        tests/cuda/develop_stream_ownership_microtests.cu
+    )
+
+    target_link_libraries(develop_stream_ownership_microtests PRIVATE
+        helix_test_support
+        CUDA::cudart
+    )
+
+    target_include_directories(develop_stream_ownership_microtests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+
+    set_target_properties(develop_stream_ownership_microtests PROPERTIES
+        CUDA_ARCHITECTURES "${HELIX_CUDA_ARCHITECTURES}"
+    )
+
+    helix_add_test(
+        NAME develop_stream_ownership_microtests
+        TARGET develop_stream_ownership_microtests
+        LABELS cuda
+        GPU
+        TIMEOUT 30
+    )
+
+    # M3.2 H-3.2.1 mechanism microtest: cudaEventRecord + cudaStreamWaitEvent
+    # fan-in topology across N owned streams. Mirrors the helpers in
+    # src/liouville.cu (sparseStreamFanInToZero / FanOutFromZero).
+    add_executable(event_based_sync_microtests
+        tests/cuda/event_based_sync_microtests.cu
+    )
+
+    target_link_libraries(event_based_sync_microtests PRIVATE
+        helix_test_support
+        CUDA::cudart
+    )
+
+    target_include_directories(event_based_sync_microtests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+
+    set_target_properties(event_based_sync_microtests PROPERTIES
+        CUDA_ARCHITECTURES "${HELIX_CUDA_ARCHITECTURES}"
+    )
+
+    helix_add_test(
+        NAME event_based_sync_microtests
+        TARGET event_based_sync_microtests
+        LABELS cuda
+        GPU
+        TIMEOUT 30
+    )
+
+    add_executable(diagonal_hamiltonian_commutator_cuda_tests
+        tests/cuda/diagonal_hamiltonian_commutator_tests.cu
+        src/cuda_sparse_backend_plan.cu
+        src/library/backend_profiling.cpp
+        src/liouville.cu
+        src/matrix_storage.cu
+        src/matrix_util.cu
+    )
+
+    target_link_libraries(diagonal_hamiltonian_commutator_cuda_tests PRIVATE
+        helix_host_core
+        helix_test_support
+        CUDA::cublas
+        CUDA::cusparse
+    )
+
+    target_include_directories(diagonal_hamiltonian_commutator_cuda_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+
+    set_target_properties(diagonal_hamiltonian_commutator_cuda_tests PROPERTIES
+        CUDA_ARCHITECTURES "${HELIX_CUDA_ARCHITECTURES}"
+        CUDA_SEPARABLE_COMPILATION ON
+        CUDA_RESOLVE_DEVICE_SYMBOLS ON
+    )
+
+    helix_add_test(
+        NAME diagonal_hamiltonian_commutator_cuda_tests
+        TARGET diagonal_hamiltonian_commutator_cuda_tests
+        LABELS cuda
+        GPU
+        TIMEOUT 60
+    )
+
     helix_add_test(
         NAME helix_cuda_memcheck_sanitizer
         COMMAND
@@ -673,6 +961,8 @@ if(HELIX_BUILD_TESTS)
 
     add_executable(cusparse_wrapper_cuda_tests
         tests/cuda/cusparse_wrapper_tests.cu
+        src/cuda_sparse_backend_plan.cu
+        src/library/backend_profiling.cpp
     )
 
     target_link_libraries(cusparse_wrapper_cuda_tests PRIVATE
@@ -698,6 +988,8 @@ if(HELIX_BUILD_TESTS)
 
     add_executable(sparse_drho_reference_tests
         tests/numerical/sparse_drho_reference_tests.cu
+        src/cuda_sparse_backend_plan.cu
+        src/library/backend_profiling.cpp
         src/initialize.cu
         src/liouville.cu
         src/matrix_storage.cu
@@ -731,6 +1023,8 @@ if(HELIX_BUILD_TESTS)
 
     add_executable(one_step_evolution_tests
         tests/numerical/one_step_evolution_tests.cu
+        src/cuda_sparse_backend_plan.cu
+        src/library/backend_profiling.cpp
         src/initialize.cu
         src/liouville.cu
         src/matrix_storage.cu
@@ -764,6 +1058,8 @@ if(HELIX_BUILD_TESTS)
 
     add_executable(heom_lifecycle_contract_tests
         tests/numerical/heom_lifecycle_contract_tests.cu
+        src/cuda_sparse_backend_plan.cu
+        src/library/backend_profiling.cpp
         src/initialize.cu
         src/liouville.cu
         src/matrix_storage.cu

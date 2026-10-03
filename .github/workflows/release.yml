@@ -40,7 +40,7 @@ jobs:
       HELIX_CUDA_ARCHITECTURES: ${{ github.event.inputs.cuda_architectures || '89' }}
     steps:
       - name: Check out
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.ref_type == 'tag' && github.ref_name || github.event.inputs.tag }}
 
@@ -50,6 +50,21 @@ jobs:
             echo "Release tags must use vMAJOR.MINOR.PATCH, optionally with a prerelease suffix." >&2
             exit 1
           fi
+
+      - name: Configure CUDA 13.2 toolkit environment
+        run: |
+          CUDA_DIR=/usr/local/cuda-13.2
+          if [[ ! -x "${CUDA_DIR}/bin/nvcc" ]]; then
+            echo "Expected CUDA 13.2 toolkit at ${CUDA_DIR}/bin/nvcc but it is missing." >&2
+            exit 1
+          fi
+          echo "${CUDA_DIR}/bin" >> "${GITHUB_PATH}"
+          {
+            echo "CUDA_HOME=${CUDA_DIR}"
+            echo "CUDA_PATH=${CUDA_DIR}"
+            echo "CUDACXX=${CUDA_DIR}/bin/nvcc"
+            echo "LD_LIBRARY_PATH=${CUDA_DIR}/lib64${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+          } >> "${GITHUB_ENV}"
 
       - name: Show GPU and CUDA tools
         run: |
@@ -71,7 +86,7 @@ jobs:
 
       - name: Attest release package
         if: github.event.repository.visibility == 'public'
-        uses: actions/attest@v4
+        uses: actions/attest@v4.2.2
         with:
           subject-path: ${{ runner.temp }}/helix-dist/*.tar.gz
 
@@ -152,7 +167,7 @@ jobs:
       RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || github.event.inputs.tag }}
     steps:
       - name: Check out
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ env.RELEASE_TAG }}
           fetch-depth: 0
@@ -164,7 +179,7 @@ jobs:
           echo "Resolved documentation version: ${RELEASE_TAG}"
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: "3.12"
           cache: pip
@@ -224,7 +239,7 @@ jobs:
           echo "HELIX_PAGES_ARTIFACT=${pages_artifact}" >> "${GITHUB_ENV}"
 
       - name: Configure GitHub Pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@v6
 
       - name: Upload GitHub Pages artifact
         uses: actions/upload-pages-artifact@v5

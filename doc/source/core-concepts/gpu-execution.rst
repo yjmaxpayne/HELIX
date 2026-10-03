@@ -13,12 +13,70 @@ cuSPARSE handles, and coefficient storage. It computes sparse Hamiltonian and
 coupling contributions with cuSPARSE and accumulates dense vector operations
 with cuBLAS.
 
+The default sparse path uses a private reusable cuSPARSE backend plan for
+compatible SpMM calls. The plan keeps sparse and dense descriptors plus the
+SpMM workspace alive across steady propagation, updates dense input/output
+pointers with ``cusparseDnMatSetValues``, and rejects shape or CSR pointer
+mismatches instead of silently rebinding an incompatible operator. Set
+``HELIX_CUSPARSE_REUSE_PLAN=0`` to route sparse calls through the legacy
+``cuda_types.h`` compatibility wrappers for rollback triage.
+
+The compiled diagonal-Hamiltonian path uses an elementwise kernel, so the
+remaining steady-scope SpMM and physical transpose counters come from the
+legacy spin-glass ``V`` path. A structured ``V`` replacement is deferred for
+v0.0.4 and would be private to the legacy spin-glass adapter. It does not
+change the validation-only ``System::from_sparse()`` contract or add arbitrary
+sparse HEOM runtime support.
+
 CUDA 13 compatibility
 ---------------------
 
 CUDA 13 removed legacy ``cusparseCcsrmm`` and ``cusparseCcsrmm2`` APIs. HELIX
 keeps source compatibility through wrappers in ``cuda_types.h`` that map those
-operations to ``cusparseSpMM``.
+operations to ``cusparseSpMM``. The plan-enabled path adopts
+``cusparseDnMatSetValues`` and one-time ``cusparseSpMM_bufferSize`` queries,
+rejects values-only sparse rebinding for the current stable H/V operators, and
+defers ``cusparseCsrSetPointers`` and ``cusparseSpMM_preprocess`` until dynamic
+CSR/layout and CUDA Graph feasibility tasks have separate correctness gates.
+
+Layout and result order
+-----------------------
+
+The current backend keeps the public reduced-density buffer contract
+row-major. Sparse commutator call sites may still use physical transposes to
+bridge cuSPARSE descriptor order and the legacy dense buffer semantics, but
+``ReducedDensityShape::storageOrder`` remains ``RowMajor`` for public
+``RunResult`` values. Any future backend-local layout change must convert at
+``ResultExtractor`` before crossing the public API boundary.
+
+Synchronization and CUDA Graphs
+-------------------------------
+
+``develop()`` and ``getdRhoSparse()`` synchronize through CUDA events on the
+hot path instead of device-wide fences. Three file-scope event-pool
+singletons in ``liouville.cu`` — ``sparseStreamEvents`` (per-stream),
+``sparseRendezvousEvent`` (shared rendezvous), and ``developStreamEvent`` —
+are created lazily by ``ensureSparseStreamEvents()`` with
+``cudaEventDisableTiming``. The helpers ``sparseStreamFanInToZero`` and
+``sparseStreamFanOutFromZero`` implement a fan-in / fan-out rendezvous
+across the per-hierarchy streams: ``getdRhoSparse``'s stage and exit
+barriers fan all streams into ``streams[0]``, ``develop()`` then bridges
+``streams[0]`` into ``developCopyStream`` through ``sparseRendezvousEvent``,
+and the next Taylor iteration chains through ``developStreamEvent``. The
+per-step outer fence inside ``LegacyRuntimeSession::run_steps()`` has been
+removed; subsequent ``develop()`` calls serialize naturally on
+``developCopyStream`` and host readers sync through their own D-to-H
+copies. ``cudaDeviceSynchronize()`` is retained only at storage teardown.
+
+Set ``HELIX_DEBUG_SYNC_MODE=on`` to re-add defensive
+``cudaDeviceSynchronize()`` calls alongside the event path at the four
+Segment-2 fence sites for first-failure attribution; debug mode
+intentionally blocks CUDA Graph capture. See
+:doc:`../development/build-and-test` for the full env-var contract. The
+benchmark summary records the T8 synchronization audit and the
+fixed-shape CUDA Graph feasibility decision; ``v005_cuda_graph_spike_gate``
+(label ``benchmark``) is the dedicated capture-replay evidence gate and is
+excluded from the default CTest selector.
 
 Dynamic dense path
 ------------------

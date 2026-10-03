@@ -383,9 +383,61 @@ Bath Bath::drude_lorentz_pade()
 	return bath;
 }
 
+Bath Bath::user_exponents(std::vector<std::complex<double>> coefficients,
+	std::vector<std::complex<double>> rates)
+{
+	Bath bath;
+	bath.kind = Kind::UserExponents;
+	bath.exponentCoefficients = std::move(coefficients);
+	bath.exponentRates = std::move(rates);
+	return bath;
+}
+
 Diagnostics Bath::validate_supported() const
 {
 	Diagnostics diagnostics;
+
+	if(kind == Kind::UserExponents)
+	{
+		// Bath is a tagged-union-style value object. UserExponents owns only
+		// the exponent vectors; the six Drude-Lorentz/Pade fields are ignored.
+		if(exponentCoefficients.empty())
+		{
+			diagnostics.add(StatusCode::BathExponentsInvalid,
+				"User-provided bath exponent coefficients must not be empty");
+		}
+
+		if(exponentRates.empty())
+		{
+			diagnostics.add(StatusCode::BathExponentsInvalid,
+				"User-provided bath exponent rates must not be empty");
+		}
+
+		if(exponentCoefficients.size() != exponentRates.size())
+		{
+			diagnostics.add(StatusCode::BathExponentsInvalid,
+				"User-provided bath exponent coefficients and rates must have equal sizes");
+		}
+
+		for(std::size_t i = 0; i < exponentRates.size(); ++i)
+		{
+			if(exponentRates[i].real() <= 0.0)
+			{
+				diagnostics.add(StatusCode::BathExponentsInvalid,
+					"User-provided bath exponent rate " + std::to_string(i)
+						+ " must have a positive real part");
+			}
+		}
+
+		if(diagnostics.ok())
+		{
+			diagnostics.add(StatusCode::UnsupportedBath,
+				"User-provided bath exponent sets are validation-only until the bath execution pipeline is implemented");
+		}
+
+		return diagnostics;
+	}
+
 	const Bath expected = Bath::drude_lorentz_pade();
 
 	if(!nearDefault(inverseTemperature, expected.inverseTemperature))

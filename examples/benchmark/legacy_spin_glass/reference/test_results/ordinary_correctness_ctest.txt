@@ -1,0 +1,38 @@
+Internal ctest changing into directory: /home/yjmaxpayne/Dev/HELIX/build/cmake
+Test project /home/yjmaxpayne/Dev/HELIX/build/cmake
+
+1/24 Test  #1: v01_public_header_compile_gate ...............   Passed
+2/24 Test  #2: v01_external_consumer_cmake_gate .............   Passed
+3/24 Test  #3: v01_api_schema_validation_gate ...............   Passed
+4/24 Test  #4: benchmark_schema_validation_tests ............   Passed
+5/24 Test  #5: benchmark_artifact_hygiene_tests .............   Passed
+6/24 Test  #8: v003_ctest_label_resource_lock_review ........   Passed
+7/24 Test  #9: v01_public_lifecycle_numerical_gate ..........   Passed
+8/24 Test #10: v01_public_solver_spin_glass_gate ............   Passed
+9/24 Test #11: v01_result_shape_no_file_output_gate .........   Passed
+10/24 Test #12: cli_compatibility_tests .....................   Passed
+11/24 Test #13: energy_observable_tests .....................   Passed
+12/24 Test #14: v01_cli_compatibility_wrapper_gate ..........   Passed
+13/24 Test #15: v01_cpp_library_example_gate ................   Passed
+14/24 Test #16: initialize_detail_tests .....................   Passed
+15/24 Test #17: psd_reference_tests .........................   Passed
+16/24 Test #18: parameter_default_tests .....................   Passed
+17/24 Test #19: energy_trace_comparator_tests ...............   Passed
+18/24 Test #20: transpose_cuda_tests ........................   Passed
+19/24 Test #21: diagonal_hamiltonian_commutator_cuda_tests ..   Passed
+20/24 Test #23: cusparse_wrapper_cuda_tests .................   Passed
+21/24 Test #24: sparse_drho_reference_tests .................   Passed
+22/24 Test #25: one_step_evolution_tests ....................   Passed
+23/24 Test #26: heom_lifecycle_contract_tests ...............   Passed
+24/24 Test #27: helix_smoke_integration .....................   Passed
+
+100% tests passed, 0 tests failed out of 24
+
+Label Time Summary:
+baseline       =   2.92 sec*proc (3 tests)
+cuda           =   7.01 sec*proc (12 tests)
+integration    =   7.10 sec*proc (6 tests)
+numerical      =   3.17 sec*proc (6 tests)
+unit           =   0.13 sec*proc (10 tests)
+
+Total Test time (real) =  10.51 sec

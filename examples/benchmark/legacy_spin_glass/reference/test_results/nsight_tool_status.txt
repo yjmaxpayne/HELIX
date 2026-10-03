@@ -1,0 +1,19 @@
+Command:
+  command -v nsys
+  command -v ncu
+
+Result:
+  /usr/local/cuda-13.0/bin/nsys
+  /usr/local/cuda-13.0/bin/ncu
+
+Capture:
+  Not run for the T9 reference refresh. The refreshed JSONL records
+  "nsight_artifact": null, and the Markdown summary renders it as not_collected.
+
+Generated:
+  None for this refresh.
+
+Notes:
+  Optional Nsight Systems / Nsight Compute capture remains documented for local profiling runs.
+  Raw Nsight reports are excluded from the repository because they can embed environment variables,
+  credentials, and local paths.

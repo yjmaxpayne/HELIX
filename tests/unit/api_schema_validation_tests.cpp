@@ -119,13 +119,113 @@ void test_default_bath_and_hierarchy_are_supported(helix::test::Reporter& report
 	auto bath = helix::Bath::drude_lorentz_pade();
 	auto hierarchy = helix::HierarchySpec::compiled_default(bath);
 
+	reporter.expect(helix::Bath{}.kind == helix::Bath::Kind::DrudeLorentzPade,
+		"default bath selects the Drude-Lorentz Pade kind");
+	reporter.expect(bath.kind == helix::Bath::Kind::DrudeLorentzPade,
+		"compiled bath selects the Drude-Lorentz Pade kind");
 	reporter.expect(bath.validate_supported().ok(), "compiled Drude-Lorentz Pade bath is supported");
 	reporter.expect(hierarchy.validate_supported().ok(), "compiled hierarchy mapping is supported");
+
+	const auto defaultDiagnostics = helix::Bath{}.validate_supported();
+	reporter.expect(defaultDiagnostics.hasError(helix::StatusCode::UnsupportedBath),
+		"default bath preserves its existing unsupported diagnostic");
+	reporter.expect(!defaultDiagnostics.hasError(helix::StatusCode::BathExponentsInvalid),
+		"default bath does not enter user-exponent validation");
 
 	auto system = helix::examples::legacy_spin_glass_system();
 	reporter.expect(system.valid(), "legacy spin-glass example adapter is validation clean");
 	reporter.expect(system.kind == helix::SystemKind::LegacySpinGlass,
 		"legacy spin-glass example adapter reports the compatibility system kind");
+}
+
+void test_bath_user_exponents_rejects_empty_sequences(helix::test::Reporter& reporter)
+{
+	const auto bath = helix::Bath::user_exponents({}, {});
+	const auto diagnostics = bath.validate_supported();
+
+	expectDiagnostic(reporter,
+		diagnostics,
+		helix::StatusCode::BathExponentsInvalid,
+		"empty user exponent sequences diagnostic");
+}
+
+void test_bath_user_exponents_rejects_size_mismatch(helix::test::Reporter& reporter)
+{
+	const auto extraCoefficient = helix::Bath::user_exponents(
+		{{1.0, 0.0}, {2.0, -0.5}, {3.0, 0.25}},
+		{{0.5, 0.0}, {1.0, 0.1}});
+	const auto extraRate = helix::Bath::user_exponents(
+		{{1.0, 0.0}, {2.0, -0.5}},
+		{{0.5, 0.0}, {1.0, 0.1}, {1.5, -0.1}});
+
+	expectDiagnostic(reporter,
+		extraCoefficient.validate_supported(),
+		helix::StatusCode::BathExponentsInvalid,
+		"extra user exponent coefficient diagnostic");
+	expectDiagnostic(reporter,
+		extraRate.validate_supported(),
+		helix::StatusCode::BathExponentsInvalid,
+		"extra user exponent rate diagnostic");
+}
+
+void test_bath_user_exponents_rejects_non_positive_decay_rates(helix::test::Reporter& reporter)
+{
+	const auto zeroRealPart = helix::Bath::user_exponents(
+		{{1.0, 0.0}},
+		{{0.0, 1.0}});
+	const auto negativeRealPart = helix::Bath::user_exponents(
+		{{2.0, -0.5}},
+		{{-0.5, 0.25}});
+
+	expectDiagnostic(reporter,
+		zeroRealPart.validate_supported(),
+		helix::StatusCode::BathExponentsInvalid,
+		"zero-real-part user exponent decay rate diagnostic");
+	expectDiagnostic(reporter,
+		negativeRealPart.validate_supported(),
+		helix::StatusCode::BathExponentsInvalid,
+		"negative-real-part user exponent decay rate diagnostic");
+}
+
+void test_bath_user_exponents_reports_valid_structure_as_unsupported(helix::test::Reporter& reporter)
+{
+	const auto bath = helix::Bath::user_exponents(
+		{{1.0, 0.0}, {2.0, -0.5}},
+		{{0.5, 1.0}, {1.5, -0.25}});
+	const auto diagnostics = bath.validate_supported();
+
+	expectDiagnostic(reporter,
+		diagnostics,
+		helix::StatusCode::UnsupportedBath,
+		"valid user exponent set remains validation-only");
+	reporter.expect(!diagnostics.hasError(helix::StatusCode::BathExponentsInvalid),
+		"valid user exponent set has no structural diagnostic");
+	reporter.expect(diagnostics.entries().size() == 1,
+		"valid user exponent set has only the validation-only diagnostic");
+}
+
+void test_bath_user_exponents_ignores_drude_fields(helix::test::Reporter& reporter)
+{
+	const auto baselineBath = helix::Bath::user_exponents(
+		{{1.0, 0.0}, {2.0, -0.5}},
+		{{0.5, 1.0}, {1.5, -0.25}});
+	const auto baseline = baselineBath.validate_supported();
+	auto bath = helix::Bath::user_exponents(
+		{{1.0, 0.0}, {2.0, -0.5}},
+		{{0.5, 1.0}, {1.5, -0.25}});
+	bath.inverseTemperature = -17.0;
+	bath.damping = 23.0;
+	bath.couplingStrength = -31.0;
+	bath.padeTerms = 47;
+	bath.residues = {{7.0, -3.0}};
+	bath.frequencies = {-5.0, 11.0};
+
+	const auto diagnostics = bath.validate_supported();
+
+	reporter.expect(diagnostics.summary() == baseline.summary(),
+		"user exponent validation ignores all Drude-Lorentz Pade fields");
+	reporter.expect(!diagnostics.hasError(helix::StatusCode::BathExponentsInvalid),
+		"valid user exponent set remains structurally valid with arbitrary Drude fields");
 }
 
 void test_rejects_non_default_bath_fields(helix::test::Reporter& reporter)
@@ -185,6 +285,11 @@ int main()
 	test_rejects_coupling_dimension_mismatch(reporter);
 	test_reports_unsupported_precision_backend_and_context(reporter);
 	test_default_bath_and_hierarchy_are_supported(reporter);
+	test_bath_user_exponents_rejects_empty_sequences(reporter);
+	test_bath_user_exponents_rejects_size_mismatch(reporter);
+	test_bath_user_exponents_rejects_non_positive_decay_rates(reporter);
+	test_bath_user_exponents_reports_valid_structure_as_unsupported(reporter);
+	test_bath_user_exponents_ignores_drude_fields(reporter);
 	test_rejects_non_default_bath_fields(reporter);
 	test_rejects_non_default_hierarchy_fields(reporter);
 	test_reports_sparse_execution_as_validation_only(reporter);

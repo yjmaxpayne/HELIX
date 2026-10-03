@@ -96,8 +96,11 @@ The current runtime uses explicit global state:
 * ``matrix_storage.*`` owns global device vectors such as ``dH``, ``dV``, ``dNu``,
   ``dRho``, hierarchy storage, sparse operator storage, and
   ``clearMatrixStorage()``.
-* ``liouville.cu`` owns sparse propagation caches, CUDA streams, cuBLAS handles,
-  cuSPARSE handles, the matrix descriptor, and ``clearLiouvilleStorage()``.
+* ``liouville.cu`` owns sparse propagation caches, per-hierarchy CUDA streams,
+  cuBLAS handles, cuSPARSE handles, the matrix descriptor, the file-scope
+  event pool used for fan-in/fan-out synchronization
+  (``sparseStreamEvents``, ``sparseRendezvousEvent``,
+  ``developStreamEvent``), and ``clearLiouvilleStorage()``.
 * ``parameters.*`` owns static default parameters and the global
   ``cublasHandle``.
 
@@ -109,9 +112,14 @@ GPU execution
 -------------
 
 The default propagation path is sparse and host-orchestrated. It uses cuSPARSE
-for sparse-dense products, cuBLAS for dense vector operations, CUDA streams per
-hierarchy row, and a CUDA 13 compatibility wrapper in ``cuda_types.h`` for the
-removed legacy ``cusparseCcsrmm`` and ``cusparseCcsrmm2`` entry points.
+for sparse-dense products, cuBLAS for dense vector operations, and one CUDA
+stream per hierarchy row converging on ``streams[0]`` through a per-stream
+``cudaEvent_t`` pool (fan-in into ``streams[0]`` plus fan-out from
+``streams[0]`` via a shared rendezvous event). A CUDA 13 compatibility wrapper
+in ``cuda_types.h`` covers the removed legacy ``cusparseCcsrmm`` and
+``cusparseCcsrmm2`` entry points. See
+:doc:`../core-concepts/gpu-execution` for the event-pool topology and the
+``HELIX_DEBUG_SYNC_MODE`` opt-in.
 
 The old dynamic dense path remains guarded behind ``DYNAMIC_DENSE`` and should
 not be treated as the active supported path unless it is explicitly restored and
