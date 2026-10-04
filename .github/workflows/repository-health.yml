@@ -32,9 +32,13 @@ jobs:
           test -f .github/release-drafter.yml
           test -x scripts/verify_examples.sh
           test -x scripts/package_release.sh
+          test -x scripts/stage_docs_site.py
 
       - name: Check shell syntax
         run: bash -n scripts/verify_examples.sh scripts/package_release.sh
+
+      - name: Check Python script syntax
+        run: python -m py_compile scripts/stage_docs_site.py
 
       - name: Check Release Drafter trigger contract
         run: |
