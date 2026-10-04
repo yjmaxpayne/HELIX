@@ -1,3 +1,0 @@
-[submodule "dev/protocol-harness"]
-	path = dev/protocol-harness
-	url = git@github.com:yjmaxpayne/protocol-harness.git
